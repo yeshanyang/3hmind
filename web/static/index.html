@@ -152,9 +152,44 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .inquiry-panel .inquiry-topic-input { width: 100%; padding: 6px 10px; background: #1e293b; border: 1px solid #475569; border-radius: 6px; color: #e2e8f0; font-size: 11px; margin-bottom: 8px; }
 .inquiry-panel .inquiry-insights { margin-top: 8px; font-size: 10px; color: #f59e0b; max-height: 80px; overflow-y: auto; }
 .inquiry-panel .inquiry-insights div { padding: 2px 0; }
+/* ====== Login Overlay ====== */
+.login-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0f172a; z-index: 200; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+.login-overlay h2 { color: #38bdf8; margin-bottom: 24px; font-size: 24px; }
+.login-overlay input { width: 280px; padding: 10px 14px; margin: 6px 0; background: #1e293b; border: 1px solid #475569; border-radius: 8px; color: #e2e8f0; font-size: 14px; }
+.login-overlay input:focus { border-color: #38bdf8; outline: none; }
+.login-overlay .login-btn { width: 280px; padding: 10px; margin: 6px 0; background: #0c4a6e; border: 1px solid #38bdf8; color: #38bdf8; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all .15s; }
+.login-overlay .login-btn:hover { background: #0369a1; color: #fff; }
+.login-overlay .login-link { color: #64748b; font-size: 12px; cursor: pointer; margin-top: 8px; background: none; border: none; }
+.login-overlay .login-link:hover { color: #38bdf8; }
+.login-overlay .login-error { color: #fca5a5; font-size: 12px; margin-top: 8px; min-height: 18px; }
+.login-overlay .user-info { position: absolute; top: 12px; right: 16px; color: #64748b; font-size: 12px; }
+.login-overlay .user-info button { margin-left: 8px; background: #334155; border: 1px solid #475569; color: #94a3b8; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 2px 8px; }
 </style>
 </head>
 <body>
+
+<!-- ============ LOGIN OVERLAY ============ -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="user-info" id="loginUserInfo" style="display:none;">
+    当前: <span id="loginUsername2"></span>
+    <button onclick="logout()">切换账号</button>
+  </div>
+  <h2>3hmind - 登录</h2>
+  <div id="loginForm">
+    <input type="text" id="loginUsername" placeholder="用户名" autocomplete="username" />
+    <input type="password" id="loginPassword" placeholder="密码" autocomplete="current-password" />
+    <button class="login-btn" id="btnLogin" onclick="doLogin()">登录</button>
+    <button class="login-link" onclick="showRegister()">注册新账号</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+  <div id="registerForm" style="display:none;">
+    <input type="text" id="regUsername" placeholder="用户名 (至少2个字符)" autocomplete="username" />
+    <input type="password" id="regPassword" placeholder="密码 (至少4个字符)" autocomplete="new-password" />
+    <button class="login-btn" id="btnRegister" onclick="doRegister()">注册</button>
+    <button class="login-link" onclick="showLogin()">返回登录</button>
+    <div class="login-error" id="regError"></div>
+  </div>
+</div>
 
 <!-- ============ SIDEBAR ============ -->
 <div class="sidebar">
@@ -340,6 +375,122 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 </div>
 
 <script>
+// ==================== 认证 ====================
+let authToken = localStorage.getItem('3hmind_token') || '';
+let currentUser = '';
+
+async function api(path, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
+  const resp = await fetch(path, { ...options, headers });
+  if (resp.status === 401) {
+    logout();
+    throw new Error('Unauthorized');
+  }
+  return resp;
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  try {
+    const resp = await api('/api/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      authToken = data.token;
+      currentUser = data.username;
+      localStorage.setItem('3hmind_token', authToken);
+      onLoginSuccess();
+    } else {
+      errEl.textContent = data.error || '登录失败';
+    }
+  } catch(e) { errEl.textContent = '网络错误'; }
+}
+
+async function doRegister() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const errEl = document.getElementById('regError');
+  try {
+    const resp = await api('/api/auth/register', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username, password})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      authToken = data.token;
+      currentUser = data.username;
+      localStorage.setItem('3hmind_token', authToken);
+      onLoginSuccess();
+    } else {
+      errEl.textContent = data.error || '注册失败';
+    }
+  } catch(e) { errEl.textContent = '网络错误'; }
+}
+
+function showRegister() {
+  document.getElementById('loginForm').style.display = 'none';
+  document.getElementById('registerForm').style.display = 'block';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('regError').textContent = '';
+}
+
+function showLogin() {
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('registerForm').style.display = 'none';
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('regError').textContent = '';
+}
+
+function logout() {
+  authToken = '';
+  currentUser = '';
+  localStorage.removeItem('3hmind_token');
+  // 停止所有活动
+  if (convMode) toggleConversationMode();
+  forceStopTTS();
+  stopRecognition();
+  if (inquiryActive) stopInquiry();
+  document.getElementById('loginOverlay').style.display = 'flex';
+  document.getElementById('loginForm').style.display = 'block';
+  document.getElementById('registerForm').style.display = 'none';
+  document.getElementById('loginUserInfo').style.display = 'none';
+}
+
+function onLoginSuccess() {
+  document.getElementById('loginOverlay').style.display = 'none';
+  document.getElementById('loginUserInfo').style.display = 'block';
+  document.getElementById('loginUsername2').textContent = currentUser;
+  if (!polling) {
+    initApp();
+  }
+}
+
+async function checkAuth() {
+  if (!authToken) return false;
+  try {
+    const resp = await api('/api/auth/me');
+    if (resp.ok) {
+      const data = await resp.json();
+      currentUser = data.username;
+      return true;
+    }
+  } catch(e) {}
+  // Token 无效，清除
+  authToken = '';
+  localStorage.removeItem('3hmind_token');
+  return false;
+}
+
 // ==================== 状态定义 ====================
 let polling = null;
 let recognition = null;
@@ -954,7 +1105,7 @@ async function sendStreamChat(msg, contextType) {
   let buffer = '';
 
   try {
-    const resp = await fetch('/api/chat/stream', {
+    const resp = await api('/api/chat/stream', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({message: msg, context_type: contextType || 'voice'})
@@ -1180,7 +1331,7 @@ async function tryAskFollowUp() {
   console.log('[追问链] 触发第' + _followUpCount + '次追问');
 
   try {
-    const resp = await fetch('/api/proactive/question', {
+    const resp = await api('/api/proactive/question', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -1225,7 +1376,7 @@ async function startInquiry() {
 
   showTyping();
   try {
-    const resp = await fetch('/api/inquiry/start', {
+    const resp = await api('/api/inquiry/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({topic})
@@ -1302,7 +1453,7 @@ async function sendInquiryAnswer(answer) {
   setConvState('processing');
 
   try {
-    const resp = await fetch('/api/inquiry/next', {
+    const resp = await api('/api/inquiry/next', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({answer})
@@ -1391,7 +1542,7 @@ async function sendInquiryAnswer(answer) {
 
 async function refreshInquiryInsights() {
   try {
-    const resp = await fetch('/api/inquiry/status');
+    const resp = await api('/api/inquiry/status');
     const data = await resp.json();
     if (data.active && data.insights_count > 0) {
       document.getElementById('inquiryInsights').innerHTML =
@@ -1402,7 +1553,7 @@ async function refreshInquiryInsights() {
 
 async function stopInquiry() {
   try {
-    const resp = await fetch('/api/inquiry/stop', {method: 'POST'});
+    const resp = await api('/api/inquiry/stop', {method: 'POST'});
     const data = await resp.json();
     if (data.summary) {
       addMessage('[对话总结] ' + data.summary, 'agent', true);
@@ -1503,7 +1654,7 @@ async function sendChat() {
   showTyping();
 
   try {
-    const resp = await fetch('/api/chat', {
+    const resp = await api('/api/chat', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({message: msg, context_type: 'text'})
@@ -1545,7 +1696,7 @@ async function sendChat() {
 async function sendAction(url) {
   showTyping();
   try {
-    const resp = await fetch(url, {method: 'POST'});
+    const resp = await api(url, {method: 'POST'});
     const data = await resp.json();
     removeTyping();
     const content = data.result || data.reflection || data.nudge || JSON.stringify(data);
@@ -1562,7 +1713,7 @@ async function sendAction(url) {
 async function sendPlan() {
   showTyping();
   try {
-    const resp = await fetch('/api/plan', {method: 'POST'});
+    const resp = await api('/api/plan', {method: 'POST'});
     const data = await resp.json();
     removeTyping();
     const content = data.result || '无响应';
@@ -1579,7 +1730,7 @@ async function sendPlan() {
 async function loadDashboard() {
   showTyping();
   try {
-    const resp = await fetch('/api/dashboard');
+    const resp = await api('/api/dashboard');
     const data = await resp.json();
     removeTyping();
     addMessage(data.result, 'agent');
@@ -1679,7 +1830,7 @@ async function uploadFile(type) {
   const endpoints = { document: '/api/upload/document', audio: '/api/upload/audio', video: '/api/upload/video' };
 
   try {
-    const resp = await fetch(endpoints[type], { method: 'POST', body: formData });
+    const resp = await api(endpoints[type], { method: 'POST', body: formData });
     const data = await resp.json();
     removeTyping();
     if (data.status === 'ok') {
@@ -1689,7 +1840,7 @@ async function uploadFile(type) {
       }
       if (type === 'document' && data.preview) {
         showTyping();
-        const chatResp = await fetch('/api/chat', {
+        const chatResp = await api('/api/chat', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({
@@ -1746,7 +1897,7 @@ async function captureCamera() {
   canvas.getContext('2d').drawImage(video, 0, 0);
   const imageData = canvas.toDataURL('image/png');
   try {
-    const resp = await fetch('/api/upload/camera', {
+    const resp = await api('/api/upload/camera', {
       method: 'POST',
       body: JSON.stringify({ image: imageData })
     });
@@ -1761,7 +1912,7 @@ async function captureCamera() {
 // ==================== 画像探索 (交互式获取 + 自动更新) ====================
 async function checkProfileStatus() {
   try {
-    const resp = await fetch('/api/profile/status');
+    const resp = await api('/api/profile/status');
     const data = await resp.json();
     const summary = document.getElementById('profileSummary');
 
@@ -1786,7 +1937,7 @@ async function checkProfileStatus() {
 async function askProfileQuestion() {
   showTyping();
   try {
-    const resp = await fetch('/api/profile/discover');
+    const resp = await api('/api/profile/discover');
     const data = await resp.json();
     removeTyping();
     if (data.question) {
@@ -1804,7 +1955,7 @@ async function saveProfile() {
   const situation = document.getElementById('situationInput').value.trim();
   if (!role && !situation) return;
   try {
-    await fetch('/api/profile', {
+    await api('/api/profile', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({role, current_situation: situation, emotional_state: ''})
@@ -1819,7 +1970,7 @@ async function addGoal() {
   const goal = input.value.trim();
   if (!goal) return;
   try {
-    await fetch('/api/goals', {
+    await api('/api/goals', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({goal, priority: 1})
@@ -1836,7 +1987,7 @@ async function addAbility() {
   const name = parts[0];
   const level = parts[1] || 'beginner';
   try {
-    await fetch('/api/abilities', {
+    await api('/api/abilities', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({name, level})
@@ -1888,7 +2039,7 @@ function startPolling() {
     // 对话模式中不推送自主消息，避免打断
     if (convMode && convState !== 'idle') return;
     try {
-      const resp = await fetch('/api/poll');
+      const resp = await api('/api/poll');
       const data = await resp.json();
       if (data.reflection) addMessage('[自主复盘]\n' + data.reflection, 'agent', true);
       if (data.nudge) addMessage('[自主提醒]\n' + data.nudge, 'agent', true);
@@ -1907,12 +2058,14 @@ function startPolling() {
 }
 
 async function initApp() {
+  // 登录后初始化
+  startPolling();
   checkProfileStatus();
   try {
-    const resp = await fetch('/api/profile/status');
+    const resp = await api('/api/profile/status');
     const data = await resp.json();
     if (!data.complete) {
-      const discResp = await fetch('/api/profile/discover');
+      const discResp = await api('/api/profile/discover');
       const discData = await discResp.json();
       if (discData.question) {
         addMessage('[画像探索] ' + discData.question, 'agent', true);
@@ -1955,8 +2108,18 @@ function autoStart() {
   }, 10000);
 }
 
-startPolling();
-initApp();
+// 页面加载：检查登录状态
+if (authToken) {
+  checkAuth().then(ok => {
+    if (ok) {
+      onLoginSuccess();
+    } else {
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
+  });
+} else {
+  document.getElementById('loginOverlay').style.display = 'flex';
+}
 </script>
 </body>
 </html>

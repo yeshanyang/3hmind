@@ -13,7 +13,7 @@ from openai import OpenAI
 from config import settings
 from memory.memory_layer import MemoryLayer
 from memory.vector_store import VectorStore
-from memory.topic_memory import get_topic_memory, TOPIC_DEFINITIONS
+from memory.topic_memory import TOPIC_DEFINITIONS
 from perception.perception_layer import PerceptionLayer
 
 
@@ -21,10 +21,11 @@ class ReasoningLayer:
     """自主思考、深度分析、生成可执行的提升方案"""
 
     def __init__(self, memory: MemoryLayer, perception: PerceptionLayer,
-                 vector_store: VectorStore = None):
+                 vector_store: VectorStore = None, topic_memory = None):
         self.memory = memory
         self.perception = perception
         self.vector = vector_store
+        self.topic_memory = topic_memory
         self._client = None
 
     @property
@@ -92,11 +93,11 @@ class ReasoningLayer:
         detected = self.perception.detect_gaps()
 
         # 查询话题记忆上下文（含优先级排序）
-        topic_memory = get_topic_memory()
-        topic_context = topic_memory.get_context_for_llm(question)
+
+        topic_context = self.topic_memory.get_context_for_llm(question)
 
         # 高优先级话题提示
-        priority_topics = topic_memory.list_all_topics()
+        priority_topics = self.topic_memory.list_all_topics()
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -175,9 +176,9 @@ class ReasoningLayer:
         detected = self.perception.detect_gaps()
 
         # 查询话题记忆上下文（含优先级排序）
-        topic_memory = get_topic_memory()
-        topic_context = topic_memory.get_context_for_llm(question)
-        priority_topics = topic_memory.list_all_topics()
+
+        topic_context = self.topic_memory.get_context_for_llm(question)
+        priority_topics = self.topic_memory.list_all_topics()
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -425,8 +426,8 @@ class ReasoningLayer:
         gaps = self.memory.list_gaps(resolved=False)
 
         # 获取高优先级话题作为追问方向提示
-        topic_memory = get_topic_memory()
-        all_topics = topic_memory.list_all_topics()
+
+        all_topics = self.topic_memory.list_all_topics()
         priority_topics = [t for t in all_topics if t.get("priority", 0) >= 6]
         topic_hint = ""
         if priority_topics:
@@ -465,7 +466,7 @@ AI 刚回复: {last_ai_response[:300] if last_ai_response else '(无)'}
         abilities = self.memory.list_abilities()
 
         # 获取高优先级话题作为主题提示
-        all_topics = get_topic_memory().list_all_topics()
+        all_topics = self.topic_memory.list_all_topics()
         priority_topics = [t for t in all_topics if t.get("priority", 0) >= 7]
 
         system_prompt = """你是一个专业的成长教练。根据用户的情况，设计一条渐进式追问链（4-6个问题），
@@ -610,14 +611,14 @@ AI 刚回复: {last_ai_response[:300] if last_ai_response else '(无)'}
     def _store_to_topic_memory(self, question: str, analysis: str):
         """自动将对话内容存入话题记忆"""
         try:
-            topic_memory = get_topic_memory()
+    
             combined = question + " " + analysis[:300]
 
             # 优先从用户问题检测话题（避免分析中的 profile 上下文干扰）
-            detected = topic_memory.detect_topic(question) or topic_memory.detect_topic(combined)
+            detected = self.topic_memory.detect_topic(question) or self.topic_memory.detect_topic(combined)
             key_points = self._extract_key_points(combined, topic_slug=detected)
 
-            topic_memory.add_entry(
+            self.topic_memory.add_entry(
                 text=combined,
                 topic_slug=detected,
                 user_input=question,
@@ -653,21 +654,21 @@ AI 刚回复: {last_ai_response[:300] if last_ai_response else '(无)'}
         """定期触发话题记忆优化"""
         import random
         if random.random() < 0.1:  # 10% 概率触发
-            all_topics = topic_memory.list_all_topics()
+            all_topics = self.topic_memory.list_all_topics()
             for t in all_topics:
                 if t.get("entries", 0) >= 5:
-                    topic_memory.optimize(t["slug"])
+                    self.topic_memory.optimize(t["slug"])
 
     def search_topic_memory(self, query: str) -> list:
         """对外接口：搜索话题记忆"""
-        return get_topic_memory().search(query)
+        return self.topic_memory.search(query)
 
     def get_topic_list(self) -> list:
         """对外接口：列出所有话题"""
-        return get_topic_memory().list_all_topics()
+        return self.topic_memory.list_all_topics()
 
     def get_topic_detail(self, topic_slug: str) -> dict:
         """对外接口：获取话题详情"""
-        return get_topic_memory().get_topic_for_agent(topic_slug)
+        return self.topic_memory.get_topic_for_agent(topic_slug)
 
 

@@ -446,19 +446,6 @@ class TopicMemory:
         return len(set_a & set_b) / len(set_a | set_b)
 
 
-# 全局单例
-_topic_memory_instance: Optional[TopicMemory] = None
-
-
-def get_topic_memory(topics_dir: str = None, db: Database = None) -> TopicMemory:
-    global _topic_memory_instance
-    if _topic_memory_instance is None:
-        _topic_memory_instance = TopicMemory(topics_dir, db=db)
-    return _topic_memory_instance
-
-
-def init_topic_memory(topics_dir: str = None, db: Database = None):
-    """外部初始化话题记忆（通常由 agent 传入共享 Database）"""
-    global _topic_memory_instance
-    _topic_memory_instance = TopicMemory(topics_dir, db=db)
-    return _topic_memory_instance
+    def set_db(self, db: Database):
+        """替换底层 Database 引用（用于用户切换等场景）"""
+        self.db = db

@@ -1,39 +1,32 @@
 """
 定时自主触发模块 — 周期性的自动复盘、督促和主动交互
-使用 asyncio 实现轻量级任务调度
+支持多用户：每个用户独立计时，独立触发
 """
 
-import asyncio
 import threading
 import time
 from datetime import datetime
-from typing import Callable
 
 from config import settings
 
 
 class AutonomousScheduler:
-    """自主定时任务调度器，定期触发复盘和主动交互"""
+    """自主定时任务调度器，支持多用户"""
 
     def __init__(self):
-        self._tasks = []
+        self._agents: dict[str, object] = {}  # user_id -> agent
         self._running = False
         self._thread = None
-        self._on_reflect = None
-        self._on_nudge = None
-        self._on_checkin = None
-        self._last_reflect_time = None
-        self._last_nudge_time = None
-        self._pending_nudge = None
-        self._pending_reflection = None
+        self._last_reflect: dict[str, datetime] = {}
+        self._last_nudge: dict[str, datetime] = {}
+        self._pending: dict[str, dict] = {}
 
-    def set_callbacks(self, on_reflect: Callable = None,
-                      on_nudge: Callable = None,
-                      on_checkin: Callable = None):
-        """设置回调函数"""
-        self._on_reflect = on_reflect
-        self._on_nudge = on_nudge
-        self._on_checkin = on_checkin
+    def register_user(self, user_id: str, agent: object):
+        """注册用户 agent，后续自动触发"""
+        self._agents[user_id] = agent
+        now = datetime.now()
+        self._last_reflect[user_id] = now
+        self._last_nudge[user_id] = now
 
     def start(self):
         """启动后台调度线程"""
@@ -52,46 +45,51 @@ class AutonomousScheduler:
             self._thread.join(timeout=5)
 
     def _loop(self):
-        """后台调度循环"""
-        # 初始化时间，避免启动后立即触发
-        self._last_reflect_time = datetime.now()
-        self._last_nudge_time = datetime.now()
-
+        """后台调度循环 — 遍历所有注册用户"""
         while self._running:
             now = datetime.now()
-            reflect_interval = (now - self._last_reflect_time).total_seconds() / 60
-            nudge_interval = (now - self._last_nudge_time).total_seconds() / 60
 
-            if reflect_interval >= settings.auto_reflect_interval_min:
-                if self._on_reflect:
+            for user_id, agent in self._agents.items():
+                if user_id not in self._last_reflect:
+                    self._last_reflect[user_id] = now
+                if user_id not in self._last_nudge:
+                    self._last_nudge[user_id] = now
+
+                reflect_interval = (now - self._last_reflect[user_id]).total_seconds() / 60
+                nudge_interval = (now - self._last_nudge[user_id]).total_seconds() / 60
+
+                if reflect_interval >= settings.auto_reflect_interval_min:
                     try:
-                        result = self._on_reflect()
-                        self._pending_reflection = result
-                        print(f"[Scheduler] 自动复盘完成 @ {now.strftime('%H:%M')}")
+                        result = agent.review()
+                        if user_id not in self._pending:
+                            self._pending[user_id] = {}
+                        self._pending[user_id]["reflection"] = result
+                        print(f"[Scheduler] 自动复盘完成 @ {now.strftime('%H:%M')} (user={user_id})")
                     except Exception as e:
-                        print(f"[Scheduler] 复盘失败: {e}")
-                self._last_reflect_time = now
+                        print(f"[Scheduler] 复盘失败 (user={user_id}): {e}")
+                    self._last_reflect[user_id] = now
 
-            if nudge_interval >= settings.auto_nudge_interval_min:
-                if self._on_nudge:
+                if nudge_interval >= settings.auto_nudge_interval_min:
                     try:
-                        result = self._on_nudge()
-                        self._pending_nudge = result
-                        print(f"[Scheduler] 自动督促完成 @ {now.strftime('%H:%M')}")
+                        result = agent.nudge()
+                        if user_id not in self._pending:
+                            self._pending[user_id] = {}
+                        self._pending[user_id]["nudge"] = result
+                        print(f"[Scheduler] 自动督促完成 @ {now.strftime('%H:%M')} (user={user_id})")
                     except Exception as e:
-                        print(f"[Scheduler] 督促失败: {e}")
-                self._last_nudge_time = now
+                        print(f"[Scheduler] 督促失败 (user={user_id}): {e}")
+                    self._last_nudge[user_id] = now
 
-            # 每分钟检查一次
             time.sleep(60)
 
-    def get_pending(self) -> dict:
-        """获取待推送的自动消息"""
-        result = {}
-        if self._pending_reflection:
-            result["reflection"] = self._pending_reflection
-            self._pending_reflection = None
-        if self._pending_nudge:
-            result["nudge"] = self._pending_nudge
-            self._pending_nudge = None
+    def get_pending(self, user_id: str) -> dict:
+        """获取并清除指定用户的待推送消息"""
+        result = self._pending.pop(user_id, {})
         return result
+
+    def remove_user(self, user_id: str):
+        """移除用户（清理定时器状态）"""
+        self._agents.pop(user_id, None)
+        self._last_reflect.pop(user_id, None)
+        self._last_nudge.pop(user_id, None)
+        self._pending.pop(user_id, None)

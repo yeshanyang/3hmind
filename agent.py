@@ -6,7 +6,7 @@
 from config import settings
 from memory.memory_layer import MemoryLayer
 from memory.vector_store import VectorStore
-from memory.topic_memory import get_topic_memory, init_topic_memory
+from memory.topic_memory import TopicMemory
 from perception.perception_layer import PerceptionLayer
 from reasoning.reasoning_layer import ReasoningLayer
 from interaction.interaction_layer import InteractionLayer
@@ -15,16 +15,23 @@ from interaction.interaction_layer import InteractionLayer
 class SelfGrowthAgent:
     """3hmind 自我成长智能体 — 4层架构主控制器"""
 
-    def __init__(self, memory_path: str = None, vector_path: str = "vector_memory.json"):
-        self.memory = MemoryLayer(memory_path or settings.memory_path)
-        self.vector = VectorStore(vector_path)
+    def __init__(self, user_id: str, data_dir: str = "data"):
+        import os
+        user_dir = os.path.join(data_dir, user_id)
+        os.makedirs(user_dir, exist_ok=True)
+        topics_dir = os.path.join(user_dir, "topics")
+        os.makedirs(topics_dir, exist_ok=True)
+
+        db_path = os.path.join(user_dir, "memory.db")
+        chroma_path = os.path.join(user_dir, "chroma_db")
+
+        self.memory = MemoryLayer(db_path)
+        self.vector = VectorStore(chroma_path)
+        self.topic_memory = TopicMemory(topics_dir=topics_dir, db=self.memory.db)
         self.perception = PerceptionLayer(self.memory)
-        self.reasoning = ReasoningLayer(self.memory, self.perception, self.vector)
+        self.reasoning = ReasoningLayer(self.memory, self.perception, self.vector, self.topic_memory)
         self.interaction = InteractionLayer(self.memory, self.perception, self.reasoning)
         self._inquiry_session = None  # 追问会话状态
-
-        # 初始化话题记忆（与 MemoryLayer 共享同一个 SQLite Database）
-        init_topic_memory(db=self.memory.db)
 
     # ========== Inquiry Session (追问会话) ==========
 
@@ -334,11 +341,11 @@ class SelfGrowthAgent:
 
     def set_topic_priority(self, topic_slug: str, priority: int) -> dict:
         """设置话题重要性（1-10），数值越高越重要"""
-        return get_topic_memory().set_topic_priority(topic_slug, priority)
+        return self.topic_memory.set_topic_priority(topic_slug, priority)
 
     def optimize_topic(self, topic_slug: str = None) -> dict:
         """整理优化话题记忆"""
-        tm = get_topic_memory()
+        tm = self.topic_memory
         if topic_slug:
             return tm.optimize(topic_slug)
         # 优化所有话题

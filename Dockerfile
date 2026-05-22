@@ -15,6 +15,11 @@ RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r req
 # 复制项目文件
 COPY . .
 
+# 预置 ONNX 嵌入模型（避免运行时下载）
+RUN mkdir -p /root/.cache/chroma/onnx_models/all-MiniLM-L6-v2 \
+    && mv /app/onnx.tar.gz /root/.cache/chroma/onnx_models/all-MiniLM-L6-v2/onnx.tar.gz \
+    || echo "onnx.tar.gz not found, will download at runtime"
+
 # 创建持久化数据目录（可通过 volume 挂载覆盖）
 RUN mkdir -p /app/data /app/memory/topics /app/chroma_db
 
@@ -34,6 +39,6 @@ EXPOSE 8080
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8080/api/status || exit 1
+    CMD curl -f http://localhost:8080/ || exit 1
 
 CMD ["python", "main.py"]

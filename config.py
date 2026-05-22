@@ -37,6 +37,16 @@ class Settings(BaseSettings):
     host: str = os.getenv("HOST", "0.0.0.0")
     port: int = int(os.getenv("PORT", "8080"))
 
+    # Auth
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
+    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    jwt_expire_days: int = int(os.getenv("JWT_EXPIRE_DAYS", "30"))
+    users_file: str = os.getenv("USERS_FILE", "data/users.json")
+    default_admin_password: str = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
+
+    # Data isolation
+    data_dir: str = os.getenv("DATA_DIR", "data")
+
     model_config = {"extra": "ignore"}
 
 
