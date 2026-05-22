@@ -27,9 +27,6 @@ class Settings(BaseSettings):
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "1536"))
 
     # Memory
-    # [LEGACY] memory_path / vector_path 已迁移至 SQLite + ChromaDB，不再使用
-    # memory_path: str = os.getenv("MEMORY_PATH", "agent_memory.json")
-    # vector_path: str = os.getenv("VECTOR_PATH", "vector_memory")
     db_path: str = os.getenv("DB_PATH", "memory.db")
     topic_dir: str = os.getenv("TOPIC_DIR", "")
     chroma_db_path: str = os.getenv("CHROMA_DB_PATH", "")

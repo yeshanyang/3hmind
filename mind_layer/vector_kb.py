@@ -17,7 +17,7 @@ from config import settings
 class VectorKB:
     """语义向量知识库，基于 ChromaDB + API embeddings"""
 
-    def __init__(self, storage_path: str = "vector_memory.json"):
+    def __init__(self, storage_path: str = "chroma_db"):
         self._embed_client = None
         self._chroma_client = None
         self._collection = None

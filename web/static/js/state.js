@@ -1,0 +1,94 @@
+// ==================== 全局状态 ====================
+let authToken = localStorage.getItem('3hmind_token') || '';
+let currentUser = '';
+
+let polling = null;
+let recognition = null;
+let synth = window.speechSynthesis;
+let synthReady = false;
+let synthVoice = null;
+
+// 对话模式状态机
+let convMode = false;
+let convState = 'idle';       // idle | listening | processing | speaking
+let autoSpeakEnabled = true;
+let micGated = false;
+
+// AI 主动追问
+let autoAskEnabled = false;
+let lastUserMsg = '';
+let lastAiResponse = '';
+
+let sendLocked = false;
+
+// 深度对话
+let inquiryActive = false;
+let inquiryQuestions = [];
+let inquiryIndex = 0;
+let inquiryTopic = '';
+let waitingForInquiryAnswer = false;
+
+// 语音输入
+let voiceTranscript = '';
+let silenceTimer = null;
+let silenceCountdown = 0;
+let countdownInterval = null;
+let silenceHandled = false;
+let _networkErrCount = 0;
+let _useMediaRecorder = false;
+let mediaRecorder = null;
+let mediaChunks = [];
+let _lastInputWasVoice = false;
+
+// 文件上传
+let selectedFile = null;
+let selectedFileType = null;
+let cameraStream = null;
+
+// 追问链
+let followUpTimer = null;
+let _followUpCount = 0;
+const MAX_FOLLOW_UPS = 3;
+const FOLLOW_UP_DELAYS = [20, 20, 40];
+
+let ttsInterrupted = false;
+
+// 流式 TTS
+let _ttsQueue = [];
+let _ttsBusy = false;
+let _ttsSpokenLen = 0;
+let _ttsActive = false;
+
+// 静音检测常量
+const SILENCE_LONG = 10;
+const SILENCE_SHORT = 2;
+
+// 句尾检测模式
+const SENTENCE_END_PATTERNS = [
+  /[吗呢吧啊呀哦嘛咯]$/,
+  /[？?！!。，,～~]$/,
+  /什么$/, /怎么$/, /为什么$/,
+  /多少$/, /哪[个些种边]$/, /谁$/,
+  /[了的]$/,
+  /[好行对可]$/,
+  /是不是$/, /能不能$/, /会不会$/, /可不可以$/,
+  /[过完到]$/,
+  /就这样$/, /这样做$/, /没问题$/,
+  /[吧嘛][。！？]?$/,
+  /.{0,2}[。！？]$/
+];
+
+// 停止对话关键词
+const STOP_PHRASES = [
+  '不要说了', '别说了', '停止', '闭嘴', '别问了', '不要问了',
+  '关闭对话', '关闭语音', '结束对话', '再见', '拜拜', '休息吧',
+  '不要沟通了', '不聊了', '别沟通了', '停止沟通',
+];
+
+// 渐进重启延迟
+let _restartingListening = false;
+let _restartCount = 0;
+let _hasSpoken = false;
+const RESTART_DELAYS = [2, 5, 10, 20, 30, 60];
+
+const _SENTENCE_RE = /[。！？.!?\n]/;

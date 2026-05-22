@@ -25,8 +25,6 @@ class MemoryOrchestrator:
         self.session = SessionMemory()
         self.profile = UserProfile(self.db)
 
-        # [LEGACY] JSON 迁移已不再需要，数据已在 SQLite 中
-        # self._migrate_if_empty()
 
     # ==================== 统一上下文（核心） ====================
 
