@@ -23,7 +23,7 @@ services:
 # ── 共享网络（Caddy 通过容器名转发请求）──────────────────
 networks:
   web:
-    driver: bridge
+    external: true
 
 # ── 持久化数据卷 ────────────────────────────────────────
 volumes:
