@@ -167,6 +167,8 @@ async function sendStreamChat(msg, contextType) {
   msgDiv.removeAttribute('id');
 
   checkProfileStatus();
+  loadGoals();
+  saveChatHistory();
 
   lastUserMsg = msg;
   lastAiResponse = finalText;
@@ -220,6 +222,8 @@ async function sendChat() {
     const responseText = data.analysis || '无响应';
     const msgDiv = addMessage(responseText, 'agent', true);
     checkProfileStatus();
+    loadGoals();
+    saveChatHistory();
 
     lastUserMsg = msg;
     lastAiResponse = responseText;
@@ -253,6 +257,8 @@ async function sendAction(url) {
     removeTyping();
     const content = data.result || data.reflection || data.nudge || JSON.stringify(data);
     const msgDiv = addMessage(content, 'agent', true);
+    saveChatHistory();
+    loadGoals();
     if (content && content.length > 10) {
       speakText(content, msgDiv);
     }
@@ -270,6 +276,8 @@ async function sendPlan() {
     removeTyping();
     const content = data.result || '无响应';
     const msgDiv = addMessage(content, 'agent', true);
+    saveChatHistory();
+    loadGoals();
     if (content && content.length > 10) {
       speakText(content, msgDiv);
     }
@@ -286,6 +294,8 @@ async function loadDashboard() {
     const data = await resp.json();
     removeTyping();
     addMessage(data.result, 'agent');
+    saveChatHistory();
+    loadGoals();
   } catch(e) {
     removeTyping();
     addMessage('请求失败: ' + e.message, 'system');
@@ -315,6 +325,7 @@ async function tryAskFollowUp() {
     askDiv.style.borderColor = '#a855f7';
     document.getElementById('chatArea').appendChild(askDiv);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+    saveChatHistory();
 
     const cleanQ = data.question.replace(/[【】\[\]=#\-\*～\n]+/g, ' ').substring(0, 500);
     await speakText(cleanQ, askDiv);
@@ -426,6 +437,8 @@ async function sendInquiryAnswer(answer) {
 
       const summary = data.summary || '对话完成';
       addMessage(summary, 'agent', true);
+      saveChatHistory();
+      loadGoals();
 
       if (synth.speaking) synth.cancel();
       const cleanS = summary.replace(/[【】\[\]=#\-\*～\n]+/g, ' ').substring(0, 1000);
@@ -460,6 +473,7 @@ async function sendInquiryAnswer(answer) {
     nextDiv.style.borderColor = '#a855f7';
     document.getElementById('chatArea').appendChild(nextDiv);
     document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+    saveChatHistory();
 
     if (synth.speaking) synth.cancel();
     const speechText = (data.acknowledgment ? data.acknowledgment + '。' : '') + data.question;
@@ -509,6 +523,8 @@ async function stopInquiry() {
     const data = await resp.json();
     if (data.summary) {
       addMessage('[对话总结] ' + data.summary, 'agent', true);
+      saveChatHistory();
+      loadGoals();
     }
   } catch(e) {}
   inquiryActive = false;
@@ -553,4 +569,21 @@ function resetInquiryPanel() {
   document.getElementById('inquiryProgress').textContent = '';
   document.getElementById('inquiryProgressBar').style.width = '0%';
   document.getElementById('inquiryInsights').innerHTML = '';
+}
+
+// ==================== 对话历史持久化 ====================
+function saveChatHistory() {
+  const area = document.getElementById('chatArea');
+  if (area) {
+    try { sessionStorage.setItem('3hmind_chat', area.innerHTML); } catch(e) {}
+  }
+}
+
+function restoreChatHistory() {
+  try {
+    const saved = sessionStorage.getItem('3hmind_chat');
+    if (saved) {
+      document.getElementById('chatArea').innerHTML = saved;
+    }
+  } catch(e) {}
 }

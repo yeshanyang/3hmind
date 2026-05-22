@@ -104,6 +104,40 @@ class Database:
             created_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_topic_slug ON topic_entries(topic_slug);
+        CREATE TABLE IF NOT EXISTS goal_dimensions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+            name TEXT NOT NULL,
+            weight REAL NOT NULL DEFAULT 0.25,
+            max_score INTEGER NOT NULL DEFAULT 100,
+            criteria_json TEXT DEFAULT '[]',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_dim_goal ON goal_dimensions(goal_id);
+        CREATE TABLE IF NOT EXISTS assessment_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+            phase TEXT NOT NULL DEFAULT 'baseline',
+            dimension_scores_json TEXT DEFAULT '{}',
+            composite_score REAL DEFAULT 0,
+            weaknesses_json TEXT DEFAULT '[]',
+            suggestions_json TEXT DEFAULT '[]',
+            feedback_text TEXT DEFAULT '',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_assess_goal ON assessment_records(goal_id);
+        CREATE INDEX IF NOT EXISTS idx_assess_phase ON assessment_records(phase);
+        CREATE TABLE IF NOT EXISTS learning_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_id INTEGER NOT NULL REFERENCES goals(id) ON DELETE CASCADE,
+            session_type TEXT NOT NULL DEFAULT 'learn',
+            content TEXT DEFAULT '',
+            user_response TEXT DEFAULT '',
+            ai_feedback TEXT DEFAULT '',
+            score_impact_json TEXT DEFAULT '{}',
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_ls_goal ON learning_sessions(goal_id);
         """)
         c.commit()
 
@@ -146,6 +180,10 @@ class Database:
         rows = self.conn.execute(
             "SELECT * FROM goals WHERE status=? ORDER BY priority DESC, id DESC", (status,)).fetchall()
         return [dict(r) for r in rows]
+
+    def delete_goal(self, goal_id: int):
+        self.conn.execute("DELETE FROM goals WHERE id=?", (goal_id,))
+        self.conn.commit()
 
     def update_goal_progress(self, goal_id: int, progress: int):
         progress = min(100, max(0, progress))
@@ -352,3 +390,76 @@ class Database:
         if insights:
             parts.append("经验: " + "; ".join(i["insight"] for i in insights[-5:]))
         return "\n".join(parts)
+
+    # ==================== 评估系统 ====================
+
+    def seed_goal_dimensions(self, goal_id: int):
+        """为目标初始化 4 大评估维度"""
+        dims = [
+            ("知识掌握", 0.40, 100, '[{"name":"知识点覆盖","rule":"统计已掌握知识点占目标总知识点的比例"},{"name":"核心概念理解","rule":"能否正确解释核心概念并举例说明"}]'),
+            ("学习进度", 0.30, 100, '[{"name":"内容完成度","rule":"计划学习内容已完成比例"},{"name":"时间效率","rule":"实际用时与计划用时偏差"}]'),
+            ("复盘迭代", 0.20, 100, '[{"name":"复盘次数","rule":"有效复盘次数 >= 2 次为满分"},{"name":"纠错质量","rule":"发现并修正的错误数量和质量"}]'),
+            ("深度思考", 0.10, 100, '[{"name":"独立思考输出","rule":"原创观点、独到见解的数量和质量"},{"name":"问题拆解能力","rule":"能否将问题拆解为可执行的子问题"}]'),
+        ]
+        now = self._now()
+        for name, weight, max_score, criteria in dims:
+            existing = self.conn.execute(
+                "SELECT id FROM goal_dimensions WHERE goal_id=? AND name=?", (goal_id, name)
+            ).fetchone()
+            if not existing:
+                self.conn.execute(
+                    "INSERT INTO goal_dimensions(goal_id,name,weight,max_score,criteria_json,created_at) "
+                    "VALUES(?,?,?,?,?,?)",
+                    (goal_id, name, weight, max_score, criteria, now))
+        self.conn.commit()
+
+    def get_goal_dimensions(self, goal_id: int) -> list:
+        rows = self.conn.execute(
+            "SELECT * FROM goal_dimensions WHERE goal_id=? ORDER BY weight DESC", (goal_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def add_assessment_record(self, goal_id: int, phase: str, dimension_scores: dict,
+                               composite_score: float, weaknesses: list, suggestions: list,
+                               feedback_text: str = "") -> int:
+        cur = self.conn.execute(
+            "INSERT INTO assessment_records(goal_id,phase,dimension_scores_json,composite_score,"
+            "weaknesses_json,suggestions_json,feedback_text,created_at) VALUES(?,?,?,?,?,?,?,?)",
+            (goal_id, phase, self._json(dimension_scores), composite_score,
+             self._json(weaknesses), self._json(suggestions), feedback_text, self._now()))
+        self.conn.commit()
+        return cur.lastrowid
+
+    def get_assessment_history(self, goal_id: int) -> list:
+        rows = self.conn.execute(
+            "SELECT * FROM assessment_records WHERE goal_id=? ORDER BY id DESC", (goal_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_latest_assessment(self, goal_id: int, phase: str = None) -> dict:
+        if phase:
+            row = self.conn.execute(
+                "SELECT * FROM assessment_records WHERE goal_id=? AND phase=? ORDER BY id DESC LIMIT 1",
+                (goal_id, phase)).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT * FROM assessment_records WHERE goal_id=? ORDER BY id DESC LIMIT 1",
+                (goal_id,)).fetchone()
+        return dict(row) if row else {}
+
+    def add_learning_session(self, goal_id: int, session_type: str, content: str = "",
+                              user_response: str = "", ai_feedback: str = "",
+                              score_impact: dict = None) -> int:
+        cur = self.conn.execute(
+            "INSERT INTO learning_sessions(goal_id,session_type,content,user_response,"
+            "ai_feedback,score_impact_json,created_at) VALUES(?,?,?,?,?,?,?)",
+            (goal_id, session_type, content, user_response, ai_feedback,
+             self._json(score_impact or {}), self._now()))
+        self.conn.commit()
+        return cur.lastrowid
+
+    def get_learning_sessions(self, goal_id: int, n: int = 20) -> list:
+        rows = self.conn.execute(
+            "SELECT * FROM learning_sessions WHERE goal_id=? ORDER BY id DESC LIMIT ?", (goal_id, n)
+        ).fetchall()
+        return [dict(r) for r in reversed(rows)]

@@ -187,6 +187,21 @@ async def list_goals(request: Request, user_id: str = Depends(get_current_user))
     return JSONResponse(request.app.state.get_agent(user_id).mind.list_goals("active"))
 
 
+@router.delete("/api/goals/{goal_id}")
+async def delete_goal(goal_id: int, request: Request, user_id: str = Depends(get_current_user)):
+    request.app.state.get_agent(user_id).delete_goal(goal_id)
+    return JSONResponse({"status": "ok"})
+
+
+class ProgressRequest(BaseModel):
+    progress: int
+
+@router.patch("/api/goals/{goal_id}/progress")
+async def update_goal_progress(goal_id: int, req: ProgressRequest, request: Request, user_id: str = Depends(get_current_user)):
+    request.app.state.get_agent(user_id).update_goal_progress(goal_id, req.progress)
+    return JSONResponse({"status": "ok"})
+
+
 # ========== Abilities ==========
 @router.post("/api/abilities")
 async def add_ability(req: AbilityRequest, request: Request, user_id: str = Depends(get_current_user)):

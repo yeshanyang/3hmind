@@ -124,6 +124,12 @@ class UnifiedAgent:
     def add_goal(self, goal: str, priority: int = 1):
         self.mind.add_goal(goal, priority)
 
+    def delete_goal(self, goal_id: int):
+        self.mind.delete_goal(goal_id)
+
+    def update_goal_progress(self, goal_id: int, progress: int):
+        self.mind.update_goal_progress(goal_id, progress)
+
     def add_ability(self, name: str, level: str = "beginner"):
         self.mind.add_ability(name, level)
 

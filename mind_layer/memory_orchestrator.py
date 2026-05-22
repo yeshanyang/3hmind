@@ -102,6 +102,9 @@ class MemoryOrchestrator:
     def update_goal_progress(self, goal_id: int, progress: int):
         self.db.update_goal_progress(goal_id, progress)
 
+    def delete_goal(self, goal_id: int):
+        self.db.delete_goal(goal_id)
+
     def add_ability(self, name: str, level: str = "beginner", category: str = ""):
         self.db.add_ability(name, level, category)
 

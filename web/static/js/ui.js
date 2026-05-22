@@ -269,7 +269,66 @@ async function addGoal() {
     });
     input.value = '';
     addMessage(`[OK] 目标已添加: ${goal}`, 'system');
+    loadGoals();
   } catch(e) { addMessage('添加失败: ' + e.message, 'system'); }
+}
+
+// ==================== 目标列表 ====================
+async function loadGoals() {
+  const container = document.getElementById('goalsList');
+  if (!container) return;
+  try {
+    const resp = await api('/api/goals');
+    const goals = await resp.json();
+    if (!goals || goals.length === 0) {
+      container.innerHTML = '<div style="font-size:11px;color:#64748b;">暂无活跃目标，开始你的第一个目标吧</div>';
+      return;
+    }
+    container.innerHTML = goals.map(g => {
+      const pct = g.progress || 0;
+      let barClass = 'goal-bar-low';
+      if (pct >= 75) barClass = 'goal-bar-high';
+      else if (pct >= 30) barClass = 'goal-bar-mid';
+      const daysAgo = g.created_at ? Math.floor((Date.now() - new Date(g.created_at).getTime()) / 86400000) : 0;
+      const ageStr = daysAgo === 0 ? '今天' : daysAgo + '天前';
+      return `<div class="goal-item" title="点击推进进度 | ${escHtml(g.goal)}">
+        <div class="goal-meta"><span>${ageStr}</span><span>P${g.priority || 1}</span></div>
+        <div class="goal-name-row" onclick="advanceGoal(${g.id},${pct})" style="cursor:pointer;">
+          <span class="goal-name">${escHtml(g.goal)}</span>
+          <span class="goal-pct">${pct}%</span>
+          <button class="goal-del" onclick="event.stopPropagation();deleteGoal(${g.id})" title="删除">&times;</button>
+        </div>
+        <div class="goal-bar-outer"><div class="goal-bar-inner ${barClass}" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = '<div style="font-size:11px;color:#f87171;">加载失败</div>';
+  }
+}
+
+async function deleteGoal(id) {
+  try {
+    await api('/api/goals/' + id, { method: 'DELETE' });
+    loadGoals();
+  } catch(e) { addMessage('删除失败: ' + e.message, 'system'); }
+}
+
+async function advanceGoal(id, currentPct) {
+  const next = currentPct >= 100 ? 0 : Math.min(100, currentPct + 25);
+  try {
+    await api('/api/goals/' + id + '/progress', {
+      method: 'PATCH',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({progress: next})
+    });
+    loadGoals();
+  } catch(e) { addMessage('更新进度失败: ' + e.message, 'system'); }
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
 async function addAbility() {
