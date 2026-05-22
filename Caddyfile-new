@@ -1,0 +1,23 @@
+3hang.asia, www.3hang.asia {
+    reverse_proxy portfolio:80
+}
+
+vault.3hang.asia {
+    reverse_proxy vaultwarden:80
+}
+
+memo.3hang.asia {
+    reverse_proxy memos:5230
+}
+
+status.3hang.asia {
+    reverse_proxy uptime-kuma:3001
+}
+
+pan.3hang.asia {
+    reverse_proxy alist:5244
+}
+
+mind.3hang.asia {
+    reverse_proxy 3hmind:8080
+}
