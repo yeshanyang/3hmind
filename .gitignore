@@ -1,0 +1,30 @@
+# 敏感文件
+.env
+
+# 数据库文件
+*.db
+*.db-shm
+*.db-wal
+
+# 向量存储
+chroma_db/
+
+# 运行时数据文件
+vector_memory.json
+agent_memory.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store
+Thumbs.db
