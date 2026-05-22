@@ -13,7 +13,12 @@ class UserProfile:
         self.db = db
 
     def get(self) -> dict:
-        return self.db.get_profile()
+        p = self.db.get_profile()
+        if not p.get("role") and not p.get("current_situation"):
+            defaults = {"role": "全栈工程师", "current_situation": "持续学习成长中"}
+            self.db.update_profile(**defaults)
+            p = self.db.get_profile()
+        return p
 
     def update(self, **kwargs):
         self.db.update_profile(**kwargs)

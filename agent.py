@@ -88,6 +88,9 @@ class UnifiedAgent:
         # 8. 记录交互
         self.mind.record_interaction(text, analysis, intent.domain)
 
+        # 9. 自动更新用户画像
+        self._auto_update_profile(f"用户: {text}\nAI: {analysis}")
+
         return adapted
 
     # ==================== 旧 API 兼容 ====================
