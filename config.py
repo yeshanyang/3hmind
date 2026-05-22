@@ -11,7 +11,7 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # LLM API
-    llm_api_key: str = os.getenv("LLM_API_KEY", "sk-81ad204238b34e90b9217aec71dc9248")
+    llm_api_key: str = os.getenv("LLM_API_KEY", "")
     llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.deepseek.com/v1")
     llm_model: str = os.getenv("LLM_MODEL", "deepseek-v4-pro")
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
