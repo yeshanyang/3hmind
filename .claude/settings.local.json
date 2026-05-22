@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"cd ~/3hmind && DOCKER_BUILDKIT=0 /usr/local/bin/docker build -t 3hmind . 2>&1\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"/usr/local/bin/docker images 3hmind --format '{{.Repository}}:{{.Tag}} {{.ID}} {{.Size}}'\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"cd ~/3hmind && /usr/local/bin/docker run -d --name 3hmind -p 8080:8080 --env-file .env -v ~/3hmind/data:/app/data --restart unless-stopped 3hmind && echo 'Container started' && sleep 3 && /usr/local/bin/docker ps --filter name=3hmind --format 'table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}'\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"sleep 5 && curl -s http://localhost:8080/api/status && echo '' && /usr/local/bin/docker logs 3hmind 2>&1 | tail -10\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"/usr/local/bin/docker logs 3hmind 2>&1\")",
+      "PowerShell(git add requirements.txt)",
+      "PowerShell(git commit -m \"Add missing python-multipart dependency\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"/usr/local/bin/docker stop 3hmind 2>/dev/null; /usr/local/bin/docker rm 3hmind 2>/dev/null; echo 'old container removed'\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\pscp.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" \"d:\\\\code\\\\www-aiops\\\\3hmind\\\\requirements.txt\" \"admin@macbook-pro1:/Users/admin/3hmind/requirements.txt\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"cd ~/3hmind && /usr/local/bin/docker run -d --name 3hmind -p 8080:8080 --env-file .env -v ~/3hmind/data:/app/data --restart unless-stopped 3hmind && sleep 5 && curl -s http://localhost:8080/api/status\")",
+      "PowerShell(& \"C:\\\\Program Files\\\\PuTTY\\\\plink.exe\" -pw 123456 -hostkey \"ssh-ed25519 255 SHA256:XRTsqVgNcaLpIDn1xC4TNCroAfx1IRXhxaJBc6tUpjY\" admin@macbook-pro1 \"sleep 5 && /usr/local/bin/docker ps --filter name=3hmind --format 'table {{.Names}}\\\\t{{.Status}}\\\\t{{.Ports}}' && echo '===' && curl -s http://localhost:8080/api/status && echo '' && echo '===logs===' && /usr/local/bin/docker logs 3hmind 2>&1 | tail -5\")"
+    ]
+  }
+}
