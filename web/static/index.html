@@ -439,6 +439,8 @@ function forceStopTTS() {
     synth.cancel();
     ttsInterrupted = true;  // 标记中断，影响后续 AI 追问的等待时间
   }
+  // 清空流式 TTS 队列
+  _ttsResetQueue();
   micGated = false;
   // 清除所有喇叭按钮的高亮状态
   document.querySelectorAll('.msg-speak-btn').forEach(b => {
@@ -860,6 +862,62 @@ function stopListening() {
 }
 
 // ==================== SSE 流式对话 (语音对话模式专用) ====================
+// 流式 TTS 全局状态
+let _ttsQueue = [];          // 待朗读句子队列
+let _ttsBusy = false;       // 当前是否正在朗读
+let _ttsSpokenLen = 0;      // 已送入队列的源文本长度
+let _ttsActive = false;     // 流式 TTS 会话是否激活中
+
+const _SENTENCE_RE = /[。！？.!?\n]/;
+
+function _ttsSliceSentences(text) {
+  const newText = text.slice(_ttsSpokenLen);
+  const parts = [];
+  let lastEnd = 0;
+  for (let i = 0; i < newText.length; i++) {
+    if (_SENTENCE_RE.test(newText[i])) {
+      parts.push(newText.slice(lastEnd, i + 1));
+      lastEnd = i + 1;
+    }
+  }
+  if (lastEnd > 0) _ttsSpokenLen += lastEnd;
+  return parts;
+}
+
+async function _ttsFlushQueue() {
+  if (_ttsBusy) return;
+  while (_ttsQueue.length) {
+    const sentence = _ttsQueue.shift();
+    _ttsBusy = true;
+    await _ttsSpeakOne(sentence);
+    _ttsBusy = false;
+  }
+}
+
+function _ttsSpeakOne(text) {
+  return new Promise((resolve) => {
+    if (!autoSpeakEnabled) return resolve();
+    const clean = text.replace(/[【】\[\]=#\-\*～\n]+/g, ' ').trim();
+    if (!clean) return resolve();
+    const u = new SpeechSynthesisUtterance(clean);
+    if (synthVoice) u.voice = synthVoice;
+    u.lang = 'zh-CN';
+    u.rate = 1.5;
+    u.pitch = 1.0;
+    u.onend = () => resolve();
+    u.onerror = () => resolve();
+    synth.resume();
+    synth.speak(u);
+  });
+}
+
+function _ttsResetQueue() {
+  _ttsQueue = [];
+  _ttsBusy = false;
+  _ttsSpokenLen = 0;
+  _ttsActive = false;
+}
+
 async function sendStreamChat(msg, contextType) {
   if (sendLocked) return;
   sendLocked = true;
@@ -883,11 +941,17 @@ async function sendStreamChat(msg, contextType) {
 
   setConvState('processing');
 
-  // 创建一个流式消息 div
   const msgDiv = document.createElement('div');
   msgDiv.className = 'message agent streaming';
   msgDiv.id = 'streamMsg';
   document.getElementById('chatArea').appendChild(msgDiv);
+
+  // 初始化流式 TTS
+  _ttsResetQueue();
+  _ttsActive = true;
+
+  let fullText = '';
+  let buffer = '';
 
   try {
     const resp = await fetch('/api/chat/stream', {
@@ -898,8 +962,6 @@ async function sendStreamChat(msg, contextType) {
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
 
     while (true) {
       const {done, value} = await reader.read();
@@ -917,6 +979,18 @@ async function sendStreamChat(msg, contextType) {
               fullText += data.token;
               msgDiv.textContent = fullText;
               document.getElementById('chatArea').scrollTop = document.getElementById('chatArea').scrollHeight;
+
+              // 收到第一个句子时：切到 speaking 状态，锁定麦克风
+              const newSentences = _ttsSliceSentences(fullText);
+              if (newSentences.length && !_ttsBusy && _ttsQueue.length === 0) {
+                micGated = true;
+                stopRecognition();
+                setConvState('speaking');
+              }
+              for (const s of newSentences) {
+                _ttsQueue.push(s);
+              }
+              _ttsFlushQueue();
             }
             if (data.done) {
               msgDiv.classList.remove('streaming');
@@ -934,6 +1008,28 @@ async function sendStreamChat(msg, contextType) {
     msgDiv.classList.remove('streaming');
   }
 
+  // 剩余未完结的文本也送入朗读
+  const remaining = fullText.slice(_ttsSpokenLen).trim();
+  if (remaining) {
+    if (!_ttsBusy && _ttsQueue.length === 0) {
+      micGated = true;
+      stopRecognition();
+      setConvState('speaking');
+    }
+    _ttsQueue.push(remaining);
+    _ttsFlushQueue();
+  }
+
+  // 等待 TTS 队列全部播完
+  while (_ttsBusy || _ttsQueue.length) {
+    await new Promise(r => setTimeout(r, 80));
+  }
+
+  _ttsActive = false;
+
+  // 恢复麦克风
+  setTimeout(() => { micGated = false; }, 200);
+
   // 添加朗读按钮
   const finalText = msgDiv.textContent;
   if (finalText && finalText.length > 20 && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
@@ -947,30 +1043,18 @@ async function sendStreamChat(msg, contextType) {
 
   msgDiv.removeAttribute('id');
 
-  checkProfileStatus();  // 每次对话后刷新画像
+  checkProfileStatus();
 
-  // 保存本轮对话用于 AI 追问
   lastUserMsg = msg;
   lastAiResponse = finalText;
 
-  // 自动朗读 AI 回复（始终开启）
   if (finalText && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
-    setConvState('speaking');
     if (convMode) {
-      speakAndResume(msgDiv, finalText).then(() => {
-        sendLocked = false;
-      });
-      return;
-    } else {
-      speakText(finalText, msgDiv).then(() => {
-        setConvState('idle');
-        sendLocked = false;
-      });
-      return;
+      startListening();
+      scheduleNextFollowUp();
     }
-  } else {
-    setConvState('idle');
   }
+  setConvState(convMode ? 'idle' : 'idle');
   sendLocked = false;
 }
 
