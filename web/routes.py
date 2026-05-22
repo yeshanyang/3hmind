@@ -1,18 +1,22 @@
 """
 Web API 路由 — 所有 REST 接口 (多用户支持)
-扩展支持: 语音输入、文档/音频/视频上传预留入口、SSE 流式对话
+统一智能体: 语音输入、文档/音频/视频上传、SSE 流式对话
 """
 
 import json
 import os
+import io
 import base64
 import asyncio
 from fastapi import APIRouter, Depends, Request, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
+from openai import OpenAI
 
+from config import settings
 from auth import get_current_user, create_user, verify_user, create_access_token
+from input_layer.document_processor import DocumentProcessor
 
 router = APIRouter()
 
@@ -168,7 +172,7 @@ async def update_profile(req: ProfileRequest, request: Request, user_id: str = D
 
 @router.get("/api/profile")
 async def get_profile(request: Request, user_id: str = Depends(get_current_user)):
-    return JSONResponse(request.app.state.get_agent(user_id).memory.get_profile())
+    return JSONResponse(request.app.state.get_agent(user_id).mind.get_profile())
 
 
 # ========== Goals ==========
@@ -180,7 +184,7 @@ async def add_goal(req: GoalRequest, request: Request, user_id: str = Depends(ge
 
 @router.get("/api/goals")
 async def list_goals(request: Request, user_id: str = Depends(get_current_user)):
-    return JSONResponse(request.app.state.get_agent(user_id).memory.list_goals("active"))
+    return JSONResponse(request.app.state.get_agent(user_id).mind.list_goals("active"))
 
 
 # ========== Abilities ==========
@@ -192,7 +196,7 @@ async def add_ability(req: AbilityRequest, request: Request, user_id: str = Depe
 
 @router.get("/api/abilities")
 async def list_abilities(request: Request, user_id: str = Depends(get_current_user)):
-    return JSONResponse(request.app.state.get_agent(user_id).memory.list_abilities())
+    return JSONResponse(request.app.state.get_agent(user_id).mind.list_abilities())
 
 
 # ========== 自主消息轮询 ==========
@@ -283,28 +287,9 @@ async def upload_document(file: UploadFile = File(...), request: Request = None,
                           user_id: str = Depends(get_current_user)):
     content = await file.read()
     filename = file.filename or "unknown"
-    try:
-        text = content.decode("utf-8")[:10000]
-    except UnicodeDecodeError:
-        text = f"[二进制文件] {filename} ({len(content)} bytes) - 全文解析功能即将上线"
-
-    if request:
-        agent = request.app.state.get_agent(user_id)
-        agent.memory.add_history(
-            entry_type="document", content=f"上传文档: {filename}",
-            metadata={"filename": filename, "size": len(content)}
-        )
-        agent.vector.add(
-            content=f"文档 {filename}: {text[:1000]}",
-            category="document",
-            metadata={"filename": filename, "size": len(content)}
-        )
-
-    return JSONResponse({
-        "status": "ok", "filename": filename, "size": len(content),
-        "preview": text[:2000],
-        "message": f"文档 '{filename}' 已接收，内容已存入记忆库。"
-    })
+    agent = request.app.state.get_agent(user_id) if request else None
+    processor = DocumentProcessor(agent.mind if agent else None)
+    return JSONResponse(processor.process_document(content, filename))
 
 
 @router.post("/api/upload/audio")
@@ -313,23 +298,64 @@ async def upload_audio(file: UploadFile = File(...), request: Request = None,
     content = await file.read()
     filename = file.filename or "unknown"
     uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    save_path = os.path.join(uploads_dir, filename)
-    with open(save_path, "wb") as f:
-        f.write(content)
+    agent = request.app.state.get_agent(user_id) if request else None
+    processor = DocumentProcessor(agent.mind if agent else None)
+    return JSONResponse(processor.process_audio(content, filename, uploads_dir))
 
-    if request:
-        agent = request.app.state.get_agent(user_id)
-        agent.memory.add_history(
-            entry_type="audio_upload", content=f"上传音频: {filename}",
-            metadata={"filename": filename, "size": len(content), "path": save_path}
+
+# ========== 语音转文字 (STT) ==========
+
+def _get_stt_client():
+    """创建 STT 客户端，优先使用独立配置，否则复用 LLM API"""
+    key = settings.stt_api_key or settings.llm_api_key
+    url = settings.stt_base_url or settings.llm_base_url
+    if not key:
+        return None
+    return OpenAI(api_key=key, base_url=url)
+
+
+@router.post("/api/stt")
+async def speech_to_text(file: UploadFile = File(...),
+                         user_id: str = Depends(get_current_user)):
+    """浏览器录音上传 → Whisper API 转写 → 返回文本"""
+    client = _get_stt_client()
+    if not client:
+        return JSONResponse({"error": "STT 服务未配置，请设置 STT_API_KEY"}, status_code=503)
+
+    audio_bytes = await file.read()
+    filename = (file.filename or "recording.webm").lower()
+
+    # 推断 MIME 类型
+    ext_to_mime = {
+        ".webm": "audio/webm", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+        ".m4a": "audio/mp4", ".ogg": "audio/ogg", ".flac": "audio/flac",
+        ".mp4": "audio/mp4", ".opus": "audio/ogg",
+    }
+    ext = os.path.splitext(filename)[1]
+    content_type = ext_to_mime.get(ext, "audio/webm")
+
+    # 如果文件没有扩展名，尝试从内容推断
+    if not ext:
+        content_type = "audio/webm"  # 默认 MediaRecorder 格式
+
+    try:
+        result = client.audio.transcriptions.create(
+            model=settings.stt_model,
+            file=(filename, audio_bytes, content_type),
+            language="zh",
+            response_format="text",
         )
-
-    return JSONResponse({
-        "status": "ok", "filename": filename, "size": len(content),
-        "message": f"音频 '{filename}' 已保存。语音转文字功能即将上线。",
-        "future_feature": "speech-to-text"
-    })
+        text = result.strip() if isinstance(result, str) else str(result)
+        return JSONResponse({"text": text, "filename": filename})
+    except Exception as e:
+        err_msg = str(e)
+        # 常见错误友好提示
+        if "404" in err_msg or "not found" in err_msg.lower():
+            return JSONResponse(
+                {"error": f"当前 API 不支持语音转文字 ({settings.stt_base_url or settings.llm_base_url})。"
+                           "请配置 STT_BASE_URL 指向支持 Whisper 的 API。"},
+                status_code=503)
+        return JSONResponse({"error": f"语音识别失败: {err_msg}"}, status_code=500)
 
 
 @router.post("/api/upload/video")
@@ -338,23 +364,9 @@ async def upload_video(file: UploadFile = File(...), request: Request = None,
     content = await file.read()
     filename = file.filename or "unknown"
     uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-    os.makedirs(uploads_dir, exist_ok=True)
-    save_path = os.path.join(uploads_dir, filename)
-    with open(save_path, "wb") as f:
-        f.write(content)
-
-    if request:
-        agent = request.app.state.get_agent(user_id)
-        agent.memory.add_history(
-            entry_type="video_upload", content=f"上传视频: {filename}",
-            metadata={"filename": filename, "size": len(content), "path": save_path}
-        )
-
-    return JSONResponse({
-        "status": "ok", "filename": filename, "size": len(content),
-        "message": f"视频 '{filename}' 已保存。视频分析功能即将上线。",
-        "future_feature": "video-analysis"
-    })
+    agent = request.app.state.get_agent(user_id) if request else None
+    processor = DocumentProcessor(agent.mind if agent else None)
+    return JSONResponse(processor.process_video(content, filename, uploads_dir))
 
 
 @router.post("/api/upload/camera")
@@ -362,29 +374,12 @@ async def upload_camera(request: Request, user_id: str = Depends(get_current_use
     body = await request.body()
     data = json.loads(body)
     image_b64 = data.get("image", "")
-
-    if image_b64:
-        uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
-        os.makedirs(uploads_dir, exist_ok=True)
-        import time
-        filename = f"camera_{int(time.time())}.png"
-        save_path = os.path.join(uploads_dir, filename)
-        with open(save_path, "wb") as f:
-            f.write(base64.b64decode(image_b64.split(",")[-1]))
-
-        agent = request.app.state.get_agent(user_id)
-        agent.memory.add_history(
-            entry_type="camera", content="摄像头截图",
-            metadata={"filename": filename, "path": save_path}
-        )
-
-        return JSONResponse({
-            "status": "ok", "filename": filename,
-            "message": "截图已保存。图像分析功能即将上线。",
-            "future_feature": "image-vision-analysis"
-        })
-
-    return JSONResponse({"status": "error", "message": "未收到图像数据"}, status_code=400)
+    if not image_b64:
+        return JSONResponse({"status": "error", "message": "未收到图像数据"}, status_code=400)
+    uploads_dir = os.path.join(os.path.dirname(__file__), "..", "uploads")
+    agent = request.app.state.get_agent(user_id)
+    processor = DocumentProcessor(agent.mind if agent else None)
+    return JSONResponse(processor.process_camera(image_b64, uploads_dir))
 
 
 @router.get("/api/uploads/history")
@@ -392,11 +387,11 @@ async def get_upload_history(request: Request, user_id: str = Depends(get_curren
                              category: str = None):
     agent = request.app.state.get_agent(user_id)
     if category:
-        entries = agent.vector.search_by_category(category, top_k=20)
+        entries = agent.mind.vector.search_by_category(category, top_k=20)
     else:
-        entries = agent.vector.search_by_category("document", top_k=10)
-        entries += agent.vector.search_by_category("audio_upload", top_k=5)
-        entries += agent.vector.search_by_category("video_upload", top_k=5)
+        entries = agent.mind.vector.search_by_category("document", top_k=10)
+        entries += agent.mind.vector.search_by_category("audio_upload", top_k=5)
+        entries += agent.mind.vector.search_by_category("video_upload", top_k=5)
     return JSONResponse(entries)
 
 

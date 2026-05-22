@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3hmind - 自我成长智能体</title>
+<title>3hmind - 统一智能体</title>
+<link rel="stylesheet" href="/static/css/style.css">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; height: 100vh; display: flex; }
@@ -627,6 +628,7 @@ function stopAll() {
   /** 一键停止所有活动：语音监听、TTS 朗读、深度对话、追问 */
   // 停止语音识别
   stopRecognition();
+  cleanupMediaRecorder();
   document.getElementById('chatInput').value = '';
   document.getElementById('chatInput').placeholder = '输入你想聊的话题...';
   // 停止 TTS 并重置相关状态
@@ -691,6 +693,11 @@ let silenceTimer = null;       // 静音检测定时器
 let silenceCountdown = 0;      // 静音倒计时
 let countdownInterval = null;  // 倒计时刷新
 let silenceHandled = false;    // 防止重复处理静音超时
+let _networkErrCount = 0;      // network 错误连续计数（用于静默重试）
+let _useMediaRecorder = false; // Web Speech API 不可用时自动切换录音模式
+let mediaRecorder = null;      // MediaRecorder 实例
+let mediaChunks = [];          // 录音数据块
+let _lastInputWasVoice = false;// 上一条消息是否来自语音输入（用于追问控制）
 const SILENCE_LONG = 10;       // 长静音超时（句中停顿）
 const SILENCE_SHORT = 2;       // 短静音超时（句尾结束）
 
@@ -719,15 +726,24 @@ function detectSentenceEnd(text) {
 }
 
 function toggleMic() {
+  if (_useMediaRecorder) {
+    if (convState === 'listening') {
+      stopMediaRecord();
+    } else if (!micGated) {
+      startMediaRecord();
+    }
+    return;
+  }
   if (convState === 'listening') {
     stopListening();
-    if (convMode) setConvState('idle');
   } else if (!micGated) {
     startListening();
   }
 }
 
 function startListening() {
+  // 已切换到录音模式，使用 MediaRecorder
+  if (_useMediaRecorder) { startMediaRecord(); return; }
   // 先清理任何残留的识别实例，防止重复 onend 触发
   stopRecognition();
 
@@ -765,6 +781,7 @@ function startListening() {
   recognition.maxAlternatives = 1;
 
   recognition.onstart = () => {
+    _networkErrCount = 0;  // 成功启动，重置网络错误计数
     setConvState('listening');
     document.getElementById('chatInput').value = '';
     document.getElementById('chatInput').placeholder = '正在聆听... (请开始说话)';
@@ -775,6 +792,8 @@ function startListening() {
     // 用户真正说话 → 重置所有计数器
     _hasSpoken = true;
     _restartCount = 0;
+    _networkErrCount = 0;
+    _lastInputWasVoice = false;  // 新一轮语音输入，重置追问标记
     // 用户开始说话，取消 AI 追问链并重置
     resetFollowUpChain();
     // 每次有语音结果就重置静音计时器（说明用户还在说话）
@@ -808,14 +827,36 @@ function startListening() {
     }
     clearSilenceTimer();
     stopRecognition();
-    if (convMode) setConvState('idle');
-    addMessage('[语音] 识别出错: ' + event.error + '，已自动重试。', 'system');
-    // 出错后如果有已识别的文本，短暂延迟后重试监听
-    if (convMode) {
-      setTimeout(() => {
-        if (convMode && convState === 'idle') startListening();
-      }, 800);
+    setConvState('idle');  // 始终重置状态，防止死锁
+
+    if (event.error === 'network' || event.error === 'service-not-allowed' || event.error === 'not-allowed') {
+      _networkErrCount++;
+      if (_networkErrCount <= 3) {
+        // 前3次静默重试
+        const delay = Math.min(_networkErrCount * 2, 6) * 1000;
+        if (convMode) {
+          setTimeout(() => {
+            if (convMode && convState === 'idle') startListening();
+          }, delay);
+        }
+        return;
+      }
+      // 3次后切换到录音模式
+      if (!_useMediaRecorder) {
+        _useMediaRecorder = true;
+        addMessage('[语音] 浏览器语音服务不可用，已切换为录音模式。点击麦克风开始/停止录音。', 'system');
+        document.getElementById('micBtn').classList.add('record-mode');
+        if (convMode) {
+          document.getElementById('chatInput').placeholder = '点击麦克风录音...';
+        }
+      }
+      _networkErrCount = 0;
+      return;
     }
+
+    // 其他错误：显示消息
+    _networkErrCount = 0;
+    addMessage('[语音] 识别出错: ' + event.error, 'system');
   };
 
   recognition.onspeechend = () => {
@@ -857,6 +898,102 @@ function startListening() {
       if (convMode && convState === 'listening') startListening();
     }, 1500);
   }
+}
+
+// ==================== MediaRecorder 录音模式 (Web Speech API 不可用时的回退) ====================
+
+async function startMediaRecord() {
+  // 请求麦克风权限
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus' : 'audio/webm';
+
+    mediaRecorder = new MediaRecorder(stream, {mimeType});
+    mediaChunks = [];
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) mediaChunks.push(e.data);
+    };
+    mediaRecorder.onstop = async () => {
+      // 停止所有音轨
+      stream.getTracks().forEach(t => t.stop());
+      if (!mediaChunks.length) return;
+
+      const blob = new Blob(mediaChunks, {type: mimeType});
+      mediaChunks = [];
+      await sendAudioToSTT(blob);
+    };
+
+    mediaRecorder.start(250);  // 每250ms收集一次数据
+    setConvState('listening');
+    document.getElementById('micBtn').classList.add('recording');
+    document.getElementById('chatInput').value = '';
+    document.getElementById('chatInput').placeholder = '正在录音... 点击麦克风停止';
+    addMessage('[录音] 正在录音中...', 'system');
+  } catch(e) {
+    addMessage('[录音] 无法启动麦克风: ' + e.message, 'system');
+    _useMediaRecorder = false;
+    document.getElementById('micBtn').classList.remove('record-mode');
+  }
+}
+
+function stopMediaRecord() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    document.getElementById('micBtn').classList.remove('recording');
+    document.getElementById('chatInput').placeholder = '识别中...';
+  }
+}
+
+async function sendAudioToSTT(blob) {
+  const formData = new FormData();
+  formData.append('file', blob, 'recording.webm');
+
+  try {
+    const resp = await api('/api/stt', {method: 'POST', body: formData});
+    const data = await resp.json();
+    if (data.text && data.text.trim()) {
+      const text = data.text.trim();
+      document.getElementById('chatInput').value = text;
+      addMessage('[语音] ' + text, 'user');
+      // 对话模式自动发送，非对话模式填入输入框
+      if (convMode) {
+        _lastInputWasVoice = true;
+        sendStreamChat(text, 'voice');
+      }
+    } else if (data.error) {
+      addMessage('[语音] ' + data.error, 'system');
+    } else {
+      addMessage('[语音] 未识别到语音内容，请重试。', 'system');
+    }
+  } catch(e) {
+    addMessage('[语音] 识别请求失败: ' + e.message, 'system');
+  }
+
+  document.getElementById('chatInput').placeholder = _useMediaRecorder
+    ? '点击麦克风录音...' : '输入你想聊的话题...';
+  setConvState('idle');
+
+  // 对话模式下自动恢复监听
+  if (convMode && convState === 'idle') {
+    setTimeout(() => {
+      if (convMode && convState === 'idle' && _useMediaRecorder) {
+        startMediaRecord();
+      }
+    }, 1500);
+  }
+}
+
+function cleanupMediaRecorder() {
+  if (mediaRecorder) {
+    if (mediaRecorder.state !== 'inactive') {
+      mediaRecorder.onstop = null;  // 防止 onstop 触发 sendAudioToSTT
+      mediaRecorder.stop();
+    }
+    mediaRecorder = null;
+  }
+  mediaChunks = [];
+  document.getElementById('micBtn').classList.remove('recording', 'record-mode');
 }
 
 // Chrome 自动停止后重建实例重启 — 渐进延迟，永不下线
@@ -981,6 +1118,7 @@ function handleSilenceTimeout() {
       // 有足够内容，停止监听并发送
       stopRecognition();
       _hasSpoken = false;  // 发送后重置，准备下一轮
+      _lastInputWasVoice = true;
       sendStreamChat(accumulated, 'voice');
     } else {
       // 没有说话或内容太短 → 重新开始监听（不停语音输入）
@@ -1009,6 +1147,10 @@ function stopRecognition() {
 
 function stopListening() {
   stopRecognition();
+  cleanupMediaRecorder();
+  _useMediaRecorder = false;
+  _networkErrCount = 0;
+  setConvState('idle');  // 始终重置状态，防止切换模式时状态不一致
   document.getElementById('chatInput').placeholder = convMode ? '点击麦克风开始对话...' : '输入你想聊的话题...';
 }
 
@@ -1134,9 +1276,11 @@ async function sendStreamChat(msg, contextType) {
               // 收到第一个句子时：切到 speaking 状态，锁定麦克风
               const newSentences = _ttsSliceSentences(fullText);
               if (newSentences.length && !_ttsBusy && _ttsQueue.length === 0) {
-                micGated = true;
-                stopRecognition();
-                setConvState('speaking');
+                if (autoSpeakEnabled) {
+                  micGated = true;
+                  stopRecognition();
+                  setConvState('speaking');
+                }
               }
               for (const s of newSentences) {
                 _ttsQueue.push(s);
@@ -1162,7 +1306,7 @@ async function sendStreamChat(msg, contextType) {
   // 剩余未完结的文本也送入朗读
   const remaining = fullText.slice(_ttsSpokenLen).trim();
   if (remaining) {
-    if (!_ttsBusy && _ttsQueue.length === 0) {
+    if (!_ttsBusy && _ttsQueue.length === 0 && autoSpeakEnabled) {
       micGated = true;
       stopRecognition();
       setConvState('speaking');
@@ -1265,9 +1409,13 @@ const FOLLOW_UP_DELAYS = [20, 20, 40];  // 第1/2/3次追问等待秒数
 function scheduleNextFollowUp() {
   /** 追问播报完毕后，根据当前次数安排下一次追问定时器 */
   clearFollowUpTimer();
-  // 追问完成后的清理已在 tryAskFollowUp 末尾完成，count 已在调用前递增
   if (_followUpCount >= MAX_FOLLOW_UPS) {
     console.log('[追问链] 已达上限(' + _followUpCount + '次)，不再追问');
+    return;
+  }
+  // 语音输入后不追问，让对话自然流动
+  if (_lastInputWasVoice) {
+    _lastInputWasVoice = false;
     return;
   }
   const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 40) * 1000;
@@ -1290,6 +1438,11 @@ function speakAndResume(msgDiv, text) {
     setConvState('idle');
     startListening();
 
+    // AI 追问链：语音输入后不追问
+    if (_lastInputWasVoice) {
+      _lastInputWasVoice = false;
+      return;
+    }
     // AI 追问链：根据回复长度 + 播报状态计算首次等待时间
     if (autoAskEnabled && lastUserMsg && lastAiResponse && _followUpCount === 0) {
       clearFollowUpTimer();
@@ -1628,6 +1781,7 @@ function speakMessage(msgDiv, text) {
 async function sendChat() {
   if (sendLocked) return;
   sendLocked = true;
+  _lastInputWasVoice = false;  // 键盘输入，不跳过追问
 
   const input = document.getElementById('chatInput');
   const msg = input.value.trim();
@@ -2083,10 +2237,9 @@ function autoStart() {
     convMode = true;
     document.getElementById('convToggle').classList.add('on');
   }
-  // 2. 开启语音播报
+  // 2. 语音播报 — 尊重用户选择，不强制开启
   if (!autoSpeakEnabled) {
-    autoSpeakEnabled = true;
-    document.getElementById('speakToggle').classList.add('on');
+    document.getElementById('speakToggle').classList.remove('on');
   }
   // 3. 开启 AI 追问
   if (!autoAskEnabled) {

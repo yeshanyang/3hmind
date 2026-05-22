@@ -26,10 +26,11 @@ RUN mkdir -p /app/data /app/memory/topics /app/chroma_db
 # 环境变量默认值（运行时通过 -e 或 env-file 覆盖）
 ENV HOST=0.0.0.0
 ENV PORT=8080
-ENV MEMORY_PATH=/app/data/agent_memory.json
+# [LEGACY] MEMORY_PATH / VECTOR_PATH 已废弃，数据迁移至 SQLite + ChromaDB
+# ENV MEMORY_PATH=/app/data/agent_memory.json
+# ENV VECTOR_PATH=/app/data/vector_memory
 ENV DB_PATH=/app/data/memory.db
 ENV TOPIC_DIR=/app/data/topics
-ENV VECTOR_PATH=/app/data/vector_memory
 
 # ChromaDB 持久化目录重定向到 /app/data
 ENV CHROMA_DB_PATH=/app/data/chroma_db

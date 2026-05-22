@@ -17,15 +17,21 @@ class Settings(BaseSettings):
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
     llm_temperature: float = float(os.getenv("LLM_TEMPERATURE", "0.7"))
 
+    # STT (speech-to-text) — 独立配置，默认复用 LLM API
+    stt_api_key: str = os.getenv("STT_API_KEY", "")
+    stt_base_url: str = os.getenv("STT_BASE_URL", "")
+    stt_model: str = os.getenv("STT_MODEL", "qwen3-tts-vd-2026-01-26")
+
     # Embedding
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "deepseek-v4-pro")
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "1536"))
 
     # Memory
-    memory_path: str = os.getenv("MEMORY_PATH", "agent_memory.json")
+    # [LEGACY] memory_path / vector_path 已迁移至 SQLite + ChromaDB，不再使用
+    # memory_path: str = os.getenv("MEMORY_PATH", "agent_memory.json")
+    # vector_path: str = os.getenv("VECTOR_PATH", "vector_memory")
     db_path: str = os.getenv("DB_PATH", "memory.db")
     topic_dir: str = os.getenv("TOPIC_DIR", "")
-    vector_path: str = os.getenv("VECTOR_PATH", "vector_memory")
     chroma_db_path: str = os.getenv("CHROMA_DB_PATH", "")
     consolidate_threshold: int = int(os.getenv("CONSOLIDATE_THRESHOLD", "30"))
 
@@ -46,6 +52,17 @@ class Settings(BaseSettings):
 
     # Data isolation
     data_dir: str = os.getenv("DATA_DIR", "data")
+
+    # Intent parsing (统一智能体 层2)
+    intent_deep_parse_enabled: bool = os.getenv("INTENT_DEEP_PARSE_ENABLED", "true").lower() == "true"
+    intent_ambiguity_threshold: float = float(os.getenv("INTENT_AMBIGUITY_THRESHOLD", "0.6"))
+
+    # Thinking guidance (统一智能体 层4)
+    thinking_guide_enabled: bool = os.getenv("THINKING_GUIDE_ENABLED", "true").lower() == "true"
+    growth_template_auto_load: bool = os.getenv("GROWTH_TEMPLATE_AUTO_LOAD", "true").lower() == "true"
+
+    # Output adaptation (统一智能体 层5)
+    output_adaptive_format: bool = os.getenv("OUTPUT_ADAPTIVE_FORMAT", "true").lower() == "true"
 
     model_config = {"extra": "ignore"}
 
