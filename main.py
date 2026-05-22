@@ -39,13 +39,22 @@ def main():
     app.state.agent = agent
     app.state.scheduler = scheduler
 
+    # SSL 配置（如果没有证书文件则回退到 HTTP）
+    import pathlib
+    cert_file = pathlib.Path("cert.pem")
+    key_file = pathlib.Path("key.pem")
+    use_ssl = cert_file.exists() and key_file.exists()
+
     # 启动 Web 服务
-    url = f"http://localhost:{settings.port}" if settings.host == "0.0.0.0" else f"http://{settings.host}:{settings.port}"
+    proto = "https" if use_ssl else "http"
+    url = f"{proto}://localhost:{settings.port}" if settings.host == "0.0.0.0" else f"{proto}://{settings.host}:{settings.port}"
     print(f"\n[Web] 服务已启动 -> {url} (浏览器打开此地址)")
     uvicorn.run(
         "web.app:app",
         host=settings.host,
         port=settings.port,
+        ssl_keyfile=str(key_file) if use_ssl else None,
+        ssl_certfile=str(cert_file) if use_ssl else None,
         log_level="info"
     )
 
