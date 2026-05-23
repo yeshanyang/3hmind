@@ -296,6 +296,7 @@ async function loadGoals() {
         <div class="goal-name-row" onclick="advanceGoal(${g.id},${pct})" style="cursor:pointer;">
           <span class="goal-name">${escHtml(g.goal)}</span>
           <span class="goal-pct">${pct}%</span>
+          <button class="goal-assess" onclick="event.stopPropagation();assessGoal(${g.id})" title="专家评估">&#9733;</button>
           <button class="goal-del" onclick="event.stopPropagation();deleteGoal(${g.id})" title="删除">&times;</button>
         </div>
         <div class="goal-bar-outer"><div class="goal-bar-inner ${barClass}" style="width:${pct}%"></div></div>
@@ -323,6 +324,39 @@ async function advanceGoal(id, currentPct) {
     });
     loadGoals();
   } catch(e) { addMessage('更新进度失败: ' + e.message, 'system'); }
+}
+
+async function assessGoal(id) {
+  addMessage('[评估] 正在对目标进行专家系统评估...', 'system');
+  showTyping();
+  try {
+    const resp = await api('/api/goals/' + id + '/assess', { method: 'POST' });
+    const data = await resp.json();
+    removeTyping();
+
+    const dims = data.dimension_scores || {};
+    const dimLines = Object.entries(dims).map(([k, v]) => {
+      const bar = '#'.repeat(Math.round(v.score / 10)) + '-'.repeat(10 - Math.round(v.score / 10));
+      return `  ${k} [${bar}] ${v.score}分 (权重${(v.weight*100).toFixed(0)}%)`;
+    }).join('\n');
+
+    const weakLines = (data.weaknesses || []).length > 0
+      ? '\n\n短板:\n' + data.weaknesses.map(w => `  ⚠ ${w.dimension}: ${w.score}分 (差${w.gap}分达标)`).join('\n')
+      : '';
+
+    const sugLines = (data.suggestions || []).length > 0
+      ? '\n\n改进建议:\n' + data.suggestions.map(s => `  ▶ ${s.dimension}: ${s.action}`).join('\n')
+      : '';
+
+    const report = `[专家评估报告]\n综合达成率: ${data.composite_score}%\n\n维度得分:\n${dimLines}${weakLines}${sugLines}\n\n${data.feedback || ''}`;
+    addMessage(report, 'agent', true);
+
+    loadGoals();
+    saveChatHistory();
+  } catch(e) {
+    removeTyping();
+    addMessage('评估失败: ' + e.message, 'system');
+  }
 }
 
 function escHtml(s) {

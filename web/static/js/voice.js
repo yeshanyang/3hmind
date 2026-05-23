@@ -28,23 +28,15 @@
   synth.speak(warmUtterance);
 })();
 
-// ==================== 对话模式开关 ====================
+// ==================== 对话模式开关（已简化 — 在线对话按钮已移除） ====================
 function toggleConversationMode() {
   convMode = !convMode;
-  const toggle = document.getElementById('convToggle');
-
   if (convMode) {
-    toggle.classList.add('on');
     setConvState('idle');
-    addMessage('[在线对话模式已开启] 点击麦克风按钮开始语音对话，说完后自动回复、自动朗读、自动继续聆听。', 'system');
   } else {
-    toggle.classList.remove('on');
     stopListening();
     setConvState('idle');
-    if (inquiryActive) {
-      stopInquiry();
-    }
-    addMessage('[在线对话模式已关闭] 回到手动输入模式。', 'system');
+    if (inquiryActive) stopInquiry();
   }
 }
 
@@ -106,24 +98,20 @@ function stopAll() {
 
 function setConvState(state) {
   convState = state;
-  const bar = document.getElementById('convBar');
   const dot = document.getElementById('statusDot');
   const text = document.getElementById('statusText');
   const stopBtn = document.getElementById('btnStopAll');
 
-  bar.className = 'conv-bar ' + state + (convMode ? ' show' : state === 'idle' ? ' show' : '');
-
   const stateConfig = {
-    idle:    { msg: convMode ? '等待说话... (点击麦克风开始)' : '在线对话已关闭，点击右上角开启', cls: 'ok', status: '就绪' },
-    listening: { msg: '正在聆听... 请说话 (仅录入外部声音)', cls: 'listening', status: '聆听中...' },
-    processing: { msg: '正在思考... 请稍候', cls: 'processing', status: '思考中...' },
-    speaking: { msg: '正在回复... 麦克风已静音 (不录入系统声音)', cls: 'speaking', status: '回复中...' }
+    idle:    { cls: 'ok', status: '就绪' },
+    listening: { cls: 'listening', status: '聆听中...' },
+    processing: { cls: 'processing', status: '思考中...' },
+    speaking: { cls: 'speaking', status: '回复中...' }
   };
 
   const cfg = stateConfig[state];
   dot.className = 'status-dot ' + cfg.cls;
   text.textContent = cfg.status;
-  bar.textContent = cfg.msg;
 
   if (state !== 'idle' || inquiryActive) {
     stopBtn.style.display = 'inline-block';
@@ -493,8 +481,10 @@ function handleSilenceTimeout() {
       if (detectStopIntent(accumulated)) {
         stopRecognition();
         addMessage('[语音] ' + accumulated, 'user');
-        addMessage('[对话结束] 检测到停止意图，已关闭在线对话。随时可以重新开启。', 'system');
-        toggleConversationMode();
+        addMessage('[对话结束] 检测到停止意图。', 'system');
+        convMode = false;
+        stopListening();
+        setConvState('idle');
         return;
       }
       stopRecognition();
@@ -595,18 +585,13 @@ function speakMessage(msgDiv, text) {
 // ==================== 追问链 ====================
 function scheduleNextFollowUp() {
   clearFollowUpTimer();
-  if (_followUpCount >= MAX_FOLLOW_UPS) { return; }
-  if (_lastInputWasVoice) {
-    _lastInputWasVoice = false;
-    return;
-  }
-  const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 40) * 1000;
+  if (_followUpCount >= MAX_FOLLOW_UPS) return;
+  if (!autoAskEnabled) return;
+
+  const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 8) * 1000;
   followUpTimer = setTimeout(async () => {
     followUpTimer = null;
-    if (!convMode) return;
-    if (convState === 'listening' && !voiceTranscript.trim()) {
-      await tryAskFollowUp();
-    }
+    await tryAskFollowUp();
   }, delay);
 }
 
@@ -621,23 +606,7 @@ function speakAndResume(msgDiv, text) {
       _lastInputWasVoice = false;
       return;
     }
-    if (autoAskEnabled && lastUserMsg && lastAiResponse && _followUpCount === 0) {
-      clearFollowUpTimer();
-      const txtLen = (text || '').length;
-      let delay;
-      if (!autoSpeakEnabled || ttsInterrupted) {
-        delay = Math.min(Math.max(txtLen * 0.03 + 5, 10), 35);
-      } else {
-        delay = Math.min(Math.max(txtLen * 0.015 + 5, 8), 25);
-      }
-      followUpTimer = setTimeout(async () => {
-        followUpTimer = null;
-        if (!convMode) return;
-        if (convState === 'listening' && !voiceTranscript.trim()) {
-          await tryAskFollowUp();
-        }
-      }, delay * 1000);
-    }
+    scheduleNextFollowUp();
   });
 }
 

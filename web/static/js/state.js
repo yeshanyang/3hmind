@@ -15,7 +15,7 @@ let autoSpeakEnabled = true;
 let micGated = false;
 
 // AI 主动追问
-let autoAskEnabled = false;
+let autoAskEnabled = true;
 let lastUserMsg = '';
 let lastAiResponse = '';
 
@@ -49,7 +49,7 @@ let cameraStream = null;
 let followUpTimer = null;
 let _followUpCount = 0;
 const MAX_FOLLOW_UPS = 3;
-const FOLLOW_UP_DELAYS = [20, 20, 40];
+const FOLLOW_UP_DELAYS = [8, 15, 25];
 
 let ttsInterrupted = false;
 

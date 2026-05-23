@@ -21,6 +21,24 @@ function startPolling() {
   }, 15000);
 }
 
+function setupIdleFollowUp() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+  input.addEventListener('input', () => {
+    if (followUpTimer && autoAskEnabled) {
+      clearTimeout(followUpTimer);
+      followUpTimer = null;
+      if (_followUpCount < MAX_FOLLOW_UPS) {
+        const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 8) * 1000;
+        followUpTimer = setTimeout(async () => {
+          followUpTimer = null;
+          await tryAskFollowUp();
+        }, delay);
+      }
+    }
+  });
+}
+
 async function initApp() {
   // 恢复对话历史（sessionStorage 在关闭标签页后自动清除）
   restoreChatHistory();
@@ -31,11 +49,11 @@ async function initApp() {
   _followUpCount = 0;
 
   setupResizer();
+  setupIdleFollowUp();
   startPolling();
   checkProfileStatus();
   loadGoals();
 
-  // 不自动开启在线对话模式，让用户手动开启
   try {
     const resp = await api('/api/profile/status');
     const data = await resp.json();
@@ -48,31 +66,6 @@ async function initApp() {
       }
     }
   } catch(e) {}
-}
-
-function autoStart() {
-  if (!convMode) {
-    convMode = true;
-    document.getElementById('convToggle').classList.add('on');
-  }
-  if (!autoSpeakEnabled) {
-    document.getElementById('speakToggle').classList.remove('on');
-  }
-  if (!autoAskEnabled) {
-    autoAskEnabled = true;
-    document.getElementById('askToggle').classList.add('on');
-  }
-  setConvState('idle');
-  addMessage('[已自动开启] 在线对话 + 语音播报 + AI追问，可直接说话。', 'system');
-  startListening();
-  resetFollowUpChain();
-  followUpTimer = setTimeout(async () => {
-    followUpTimer = null;
-    if (!convMode) return;
-    if (convState === 'listening' && !voiceTranscript.trim() && autoAskEnabled) {
-      await tryAskFollowUp();
-    }
-  }, 10000);
 }
 
 // ==================== 侧边栏宽度可调节 ====================

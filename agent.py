@@ -130,6 +130,24 @@ class UnifiedAgent:
     def update_goal_progress(self, goal_id: int, progress: int):
         self.mind.update_goal_progress(goal_id, progress)
 
+    def assess_goal(self, goal_id: int, phase: str = "baseline") -> dict:
+        return self.mind.assess_with_llm(goal_id, phase, reasoning=self.reasoning)
+
+    def start_learning_session(self, goal_id: int, content: str = "") -> dict:
+        return self.mind.start_learning_session(goal_id, content)
+
+    def submit_learning_answer(self, goal_id: int, user_response: str) -> dict:
+        return self.mind.submit_learning_answer(goal_id, user_response)
+
+    def verify_goal(self, goal_id: int, user_content: str = "") -> dict:
+        return self.mind.verify_goal(goal_id, user_content, reasoning=self.reasoning)
+
+    def get_assessment_history(self, goal_id: int) -> list:
+        return self.mind.get_assessment_history(goal_id)
+
+    def get_goal_trend(self, goal_id: int) -> dict:
+        return self.mind.get_progress_trend(goal_id)
+
     def add_ability(self, name: str, level: str = "beginner"):
         self.mind.add_ability(name, level)
 

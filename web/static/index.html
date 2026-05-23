@@ -96,13 +96,10 @@
   <div class="header">
     <h1>3hmind 自我成长智能体</h1>
     <div class="header-right">
-      <button class="conv-toggle" id="convToggle" onclick="toggleConversationMode()" title="开启在线语音对话模式">
-        <span class="toggle-dot"></span> 在线对话
-      </button>
       <button class="speak-toggle on" id="speakToggle" onclick="toggleAutoSpeak()" title="语音播报 — 自动朗读 AI 回复">
         <span class="toggle-dot"></span> 语音播报
       </button>
-      <button class="ask-toggle" id="askToggle" onclick="toggleAutoAsk()" title="AI 主动追问 — 回复后自动提出问题引导继续对话">
+      <button class="ask-toggle on" id="askToggle" onclick="toggleAutoAsk()" title="AI 主动追问 — 回复后自动提出问题引导继续对话">
         <span class="toggle-dot"></span> AI追问
       </button>
       <button class="btn-stop" id="btnStopAll" onclick="stopAll()" title="停止当前对话/追问/朗读" style="display:none;">停止</button>
@@ -111,10 +108,6 @@
         <span id="statusText">就绪</span>
       </span>
     </div>
-  </div>
-
-  <div class="conv-bar idle show" id="convBar">
-    在线对话模式已关闭，点击右上角「在线对话」开启语音连续对话
   </div>
 
   <div class="chat-area" id="chatArea">

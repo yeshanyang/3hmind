@@ -202,6 +202,64 @@ async def update_goal_progress(goal_id: int, req: ProgressRequest, request: Requ
     return JSONResponse({"status": "ok"})
 
 
+# ========== 目标评估 (Assessment Engine) ==========
+
+class LearnStartRequest(BaseModel):
+    content: str = ""
+
+class LearnAnswerRequest(BaseModel):
+    user_response: str
+
+
+@router.post("/api/goals/{goal_id}/assess")
+async def assess_goal(goal_id: int, request: Request, user_id: str = Depends(get_current_user)):
+    """对指定目标执行基线评估"""
+    result = await asyncio.to_thread(
+        request.app.state.get_agent(user_id).assess_goal, goal_id)
+    return JSONResponse(result)
+
+
+@router.get("/api/goals/{goal_id}/assessment")
+async def get_assessment(goal_id: int, request: Request, user_id: str = Depends(get_current_user)):
+    """获取目标评估历史"""
+    result = request.app.state.get_agent(user_id).get_assessment_history(goal_id)
+    return JSONResponse(result)
+
+
+@router.post("/api/goals/{goal_id}/assess/verify")
+async def verify_goal(goal_id: int, req: LearnAnswerRequest, request: Request,
+                      user_id: str = Depends(get_current_user)):
+    """验证环节 — 对比基线评估"""
+    result = await asyncio.to_thread(
+        request.app.state.get_agent(user_id).verify_goal, goal_id, req.user_response)
+    return JSONResponse(result)
+
+
+@router.post("/api/goals/{goal_id}/learn/start")
+async def start_learn(goal_id: int, req: LearnStartRequest, request: Request,
+                      user_id: str = Depends(get_current_user)):
+    """开启学习环节"""
+    result = await asyncio.to_thread(
+        request.app.state.get_agent(user_id).start_learning_session, goal_id, req.content)
+    return JSONResponse(result)
+
+
+@router.post("/api/goals/{goal_id}/learn/answer")
+async def submit_answer(goal_id: int, req: LearnAnswerRequest, request: Request,
+                        user_id: str = Depends(get_current_user)):
+    """提交学习回答"""
+    result = await asyncio.to_thread(
+        request.app.state.get_agent(user_id).submit_learning_answer, goal_id, req.user_response)
+    return JSONResponse(result)
+
+
+@router.get("/api/goals/{goal_id}/trend")
+async def goal_trend(goal_id: int, request: Request, user_id: str = Depends(get_current_user)):
+    """获取目标进度趋势"""
+    result = request.app.state.get_agent(user_id).get_goal_trend(goal_id)
+    return JSONResponse(result)
+
+
 # ========== Abilities ==========
 @router.post("/api/abilities")
 async def add_ability(req: AbilityRequest, request: Request, user_id: str = Depends(get_current_user)):

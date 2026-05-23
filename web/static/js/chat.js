@@ -176,8 +176,8 @@ async function sendStreamChat(msg, contextType) {
   if (finalText && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
     if (convMode) {
       startListening();
-      scheduleNextFollowUp();
     }
+    scheduleNextFollowUp();
   }
   setConvState(convMode ? 'idle' : 'idle');
   sendLocked = false;
@@ -230,6 +230,7 @@ async function sendChat() {
 
     if (responseText && responseText.length > 5 && !responseText.startsWith('错误')) {
       setConvState('speaking');
+      scheduleNextFollowUp();
       if (convMode) {
         speakAndResume(msgDiv, responseText).then(() => { sendLocked = false; });
         return;
@@ -374,10 +375,6 @@ async function startInquiry() {
     document.getElementById('inquiryTopicInput').style.display = 'none';
 
     addMessage(`[深度对话] 开始「${data.topic}」— 共 ${data.total} 个问题`, 'system');
-
-    if (!convMode) {
-      toggleConversationMode();
-    }
 
     const firstQ = data.questions[0].text;
     const qDiv = document.createElement('div');

@@ -25,40 +25,19 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .status-dot.processing { background: #f59e0b; animation: pulse .5s infinite; }
 .status-dot.speaking { background: #22c55e; animation: pulse .8s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-/* ====== Conv Toggle ====== */
-.conv-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
-.conv-toggle:hover { border-color: #475569; color: #94a3b8; }
-.conv-toggle.on { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,.1); }
-.conv-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
-.conv-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
-	.ask-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
-	.ask-toggle:hover { border-color: #475569; color: #94a3b8; }
-	.ask-toggle.on { border-color: #a855f7; color: #a855f7; background: rgba(168,85,247,.1); }
-	.ask-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
-	.ask-toggle.on .toggle-dot { background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,.5); }
-	.speak-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
-	.speak-toggle:hover { border-color: #475569; color: #94a3b8; }
-	.speak-toggle.on { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,.1); }
-	.speak-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
-	.speak-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
-	.btn-stop { padding: 8px 18px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 700; border: 2px solid #dc2626; background: rgba(220,38,38,.15); color: #fca5a5; transition: all .2s; white-space: nowrap; animation: pulse-stop 1.2s infinite; }
-	.btn-stop:hover { background: #dc2626; color: #fff; }
-	@keyframes pulse-stop { 0%,100% { border-color: #dc2626; } 50% { border-color: #ef4444; box-shadow: 0 0 12px rgba(220,38,38,.4); } }
-/* ====== Conv State Bar ====== */
-.conv-bar { display: none; padding: 10px 24px; font-size: 13px; text-align: center; font-weight: 600; letter-spacing: .5px; transition: all .3s; }
-.conv-bar.show { display: block; }
-.conv-bar.idle { background: #1e293b; color: #64748b; border-bottom: 1px solid #334155; }
-.conv-bar.listening { background: #1a0606; color: #fca5a5; border-bottom: 1px solid #dc2626; }
-.conv-bar.processing { background: #1a1000; color: #fcd34d; border-bottom: 1px solid #f59e0b; }
-.conv-bar.speaking { background: #061a0a; color: #86efac; border-bottom: 1px solid #22c55e; }
-.conv-bar .wave { display: inline-flex; align-items: flex-end; gap: 2px; height: 20px; vertical-align: middle; margin: 0 8px; }
-.conv-bar .wave span { width: 3px; background: currentColor; border-radius: 2px; animation: wave .6s ease-in-out infinite; }
-.conv-bar .wave span:nth-child(1) { height: 10px; animation-delay: 0s; }
-.conv-bar .wave span:nth-child(2) { height: 18px; animation-delay: .1s; }
-.conv-bar .wave span:nth-child(3) { height: 14px; animation-delay: .2s; }
-.conv-bar .wave span:nth-child(4) { height: 20px; animation-delay: .3s; }
-.conv-bar .wave span:nth-child(5) { height: 12px; animation-delay: .4s; }
-@keyframes wave { 0%,100% { transform: scaleY(1); } 50% { transform: scaleY(.4); } }
+.ask-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
+.ask-toggle:hover { border-color: #475569; color: #94a3b8; }
+.ask-toggle.on { border-color: #a855f7; color: #a855f7; background: rgba(168,85,247,.1); }
+.ask-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
+.ask-toggle.on .toggle-dot { background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,.5); }
+.speak-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
+.speak-toggle:hover { border-color: #475569; color: #94a3b8; }
+.speak-toggle.on { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,.1); }
+.speak-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
+.speak-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+.btn-stop { padding: 8px 18px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 700; border: 2px solid #dc2626; background: rgba(220,38,38,.15); color: #fca5a5; transition: all .2s; white-space: nowrap; animation: pulse-stop 1.2s infinite; }
+.btn-stop:hover { background: #dc2626; color: #fff; }
+@keyframes pulse-stop { 0%,100% { border-color: #dc2626; } 50% { border-color: #ef4444; box-shadow: 0 0 12px rgba(220,38,38,.4); } }
 /* ====== Chat ====== */
 .chat-area { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
 .message { max-width: 80%; padding: 14px 18px; border-radius: 12px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; position: relative; }
@@ -167,6 +146,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .goal-item .goal-name-row:hover { background: rgba(34,197,94,0.06); }
 .goal-item .goal-del { width: 18px; height: 18px; border-radius: 3px; background: transparent; border: none; color: #64748b; font-size: 16px; line-height: 18px; text-align: center; cursor: pointer; padding: 0; flex-shrink: 0; transition: all .15s; }
 .goal-item .goal-del:hover { background: #dc2626; color: #fff; }
+.goal-item .goal-assess { width: 18px; height: 18px; border-radius: 3px; background: transparent; border: none; color: #64748b; font-size: 12px; line-height: 18px; text-align: center; cursor: pointer; padding: 0; flex-shrink: 0; transition: all .15s; }
+.goal-item .goal-assess:hover { background: #f59e0b; color: #fff; }
 .goal-item .goal-meta { font-size: 10px; color: #64748b; margin-bottom: 3px; display: flex; justify-content: space-between; }
 .goal-item .goal-bar-outer { height: 3px; background: #334155; border-radius: 2px; margin-top: 3px; overflow: hidden; }
 .goal-item .goal-bar-inner { height: 100%; border-radius: 2px; transition: width .3s; }
