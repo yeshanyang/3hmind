@@ -30,7 +30,7 @@ class MemoryOrchestrator:
 
     # ==================== 统一上下文（核心） ====================
 
-    def get_context_for_llm(self, question: str) -> str:
+    def get_context_for_llm(self, question: str, use_vector: bool = False) -> str:
         """一次性收集所有 LLM 所需上下文，替代 reasoning_layer 中的分散拼装"""
         parts = []
 
@@ -38,11 +38,6 @@ class MemoryOrchestrator:
         structured = self.db.get_all_for_context()
         if structured:
             parts.append(structured)
-
-        # 向量相似记忆
-        similar = self._search_similar(question)
-        if similar:
-            parts.append(f"相关记忆:\n{similar}")
 
         # 话题记忆
         topic_ctx = self.topics.get_context_for_llm(question)
@@ -53,6 +48,12 @@ class MemoryOrchestrator:
         session_ctx = self.session.get_context(5)
         if session_ctx:
             parts.append(f"最近对话:\n{session_ctx}")
+
+        # 向量相似记忆（默认跳过以提升响应速度）
+        if use_vector:
+            similar = self._search_similar(question)
+            if similar:
+                parts.append(f"相关记忆:\n{similar}")
 
         return "\n\n".join(parts)
 

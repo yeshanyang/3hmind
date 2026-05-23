@@ -306,6 +306,15 @@ async function loadDashboard() {
 // ==================== AI 主动追问 ====================
 async function tryAskFollowUp() {
   if (_followUpCount >= MAX_FOLLOW_UPS) return;
+  if (!autoAskEnabled) return;
+
+  // 追问前再次确认用户不在输入中 — 避免打断用户
+  if (typeof _isUserActive === 'function' && _isUserActive()) {
+    // 用户正在活动，延后 3 秒重新检查
+    scheduleNextFollowUp();
+    return;
+  }
+
   _followUpCount++;
 
   try {
@@ -319,6 +328,13 @@ async function tryAskFollowUp() {
     });
     const data = await resp.json();
     if (!data.question) { scheduleNextFollowUp(); return; }
+
+    // API 返回后再次确认用户状态
+    if (typeof _isUserActive === 'function' && _isUserActive()) {
+      _followUpCount--;
+      scheduleNextFollowUp();
+      return;
+    }
 
     const askDiv = document.createElement('div');
     askDiv.className = 'message agent';

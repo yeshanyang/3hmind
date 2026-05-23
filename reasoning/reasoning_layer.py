@@ -33,7 +33,8 @@ class ReasoningLayer:
         if self._client is None and settings.llm_api_key:
             self._client = OpenAI(
                 api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url
+                base_url=settings.llm_base_url,
+                timeout=30.0
             )
         return self._client
 
@@ -50,7 +51,8 @@ class ReasoningLayer:
                     {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=settings.llm_max_tokens,
-                temperature=settings.llm_temperature
+                temperature=settings.llm_temperature,
+                timeout=30.0
             )
             return resp.choices[0].message.content
         except Exception as e:
@@ -84,20 +86,25 @@ class ReasoningLayer:
                 yield char
 
     # ==================== 根因分析 ====================
-    def analyze_problem(self, question: str) -> str:
-        """对用户问题进行 LLM 驱动的根因分析（集成话题记忆）"""
-        context = self.memory.get_all_for_context()
-        similar = self._search_similar_memories(question)
+    def analyze_problem(self, question: str, prebuilt_context: str = "") -> str:
+        """对用户问题进行 LLM 驱动的根因分析（集成话题记忆）
+        prebuilt_context: 如果已从 MemoryOrchestrator.get_context_for_llm() 获取，
+                         则跳过重复的 SQLite/ChromaDB 查询"""
+        if prebuilt_context:
+            context = prebuilt_context
+            similar = ""
+            topic_context = ""
+        else:
+            context = self.memory.get_all_for_context()
+            similar = self._search_similar_memories(question)
+            topic_context = self.topic_memory.get_context_for_llm(question) if self.topic_memory else ""
+
         recent_topics = self._recent_topic_summary()
         emotion = self.perception.analyze_emotional_trend()
         detected = self.perception.detect_gaps()
 
-        # 查询话题记忆上下文（含优先级排序）
-
-        topic_context = self.topic_memory.get_context_for_llm(question)
-
         # 高优先级话题提示
-        priority_topics = self.topic_memory.list_all_topics()
+        priority_topics = self.topic_memory.list_all_topics() if self.topic_memory else []
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -137,7 +144,7 @@ class ReasoningLayer:
 感知到的能力差距: {json.dumps(detected, ensure_ascii=False) if detected else '无'}
 
 相关历史记忆:
-{similar}
+{similar or '（已包含在上述上下文）'}
 
 话题知识库记忆:
 {topic_context or '暂无相关话题记忆'}
@@ -154,31 +161,28 @@ class ReasoningLayer:
             metadata={"topic": question[:30]}
         )
 
-        # 保存分析结果到向量存储
-        if self.vector:
-            self.vector.add(
-                content=f"问题: {question}\n分析: {analysis[:500]}",
-                category="analysis",
-                metadata={"question": question, "time": str(datetime.now())}
-            )
-
         # 自动将对话存入话题记忆
         self._store_to_topic_memory(question, analysis)
 
         return analysis
 
-    def analyze_problem_stream(self, question: str):
+    def analyze_problem_stream(self, question: str, prebuilt_context: str = ""):
         """流式版本的根因分析，逐 token 返回（集成话题记忆）"""
-        context = self.memory.get_all_for_context()
-        similar = self._search_similar_memories(question)
+        if prebuilt_context:
+            context = prebuilt_context
+            similar = ""
+            topic_context = ""
+        else:
+            context = self.memory.get_all_for_context()
+            similar = self._search_similar_memories(question)
+            topic_context = self.topic_memory.get_context_for_llm(question) if self.topic_memory else ""
+
         recent_topics = self._recent_topic_summary()
         emotion = self.perception.analyze_emotional_trend()
         detected = self.perception.detect_gaps()
 
-        # 查询话题记忆上下文（含优先级排序）
-
-        topic_context = self.topic_memory.get_context_for_llm(question)
-        priority_topics = self.topic_memory.list_all_topics()
+        # 高优先级话题提示
+        priority_topics = self.topic_memory.list_all_topics() if self.topic_memory else []
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -195,7 +199,7 @@ class ReasoningLayer:
         system_prompt = """你是一个自我成长教练智能体。请用口语化的方式回应用户，像朋友聊天一样自然。长度控制在150字以内。直接给出核心观点和建议，不要用标记符号。"""
 
         user_prompt = f"""背景: {context}{priority_hint}
-相关记忆: {similar}
+相关记忆: {similar or '（已包含在上述上下文）'}
 话题知识: {topic_context or '无'}
 用户说: {question}
 
@@ -211,12 +215,6 @@ class ReasoningLayer:
             content=question,
             metadata={"topic": question[:30]}
         )
-        if self.vector:
-            self.vector.add(
-                content=f"Q: {question}\nA: {full_response[:500]}",
-                category="conversation",
-                metadata={"question": question, "time": str(datetime.now())}
-            )
 
         # 自动将对话存入话题记忆
         self._store_to_topic_memory(question, full_response)

@@ -54,7 +54,8 @@ class VectorKB:
     def embed_client(self):
         if self._embed_client is None and settings.llm_api_key:
             self._embed_client = OpenAI(
-                api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+                api_key=settings.llm_api_key, base_url=settings.llm_base_url,
+                timeout=15.0)
         return self._embed_client
 
     def _embed(self, text: str) -> Optional[list]:

@@ -44,6 +44,7 @@ API概览 — 30+路由分6类列出
 - **个人仪表盘** — 展示个人画像、目标、能力、差距、洞察与主题记忆
 - **画像自动提取** — 新用户默认「全栈工程师 / 持续学习成长中」，首次对话后 LLM 从对话中自动提取真实角色、情境、情绪状态、目标与能力，持续优化
 - **记忆整合** — 对话记录达到阈值后自动整合为洞察
+- **专家评估系统** — 目标4维打分（知识掌握/学习进度/复盘迭代/深度思考），规则引擎+LLM辅助，学习闭环（基线→学习→追问→反馈→验证→迭代），LLM领域知识分析与具体改进建议
 
 ## 技术栈
 
@@ -99,7 +100,8 @@ API概览 — 30+路由分6类列出
 ├── dispatch_layer/             # 第4层：任务调度与思维引导
 │   ├── dispatcher.py           #   意图驱动任务调度
 │   ├── thinking_guide.py       #   LLM思维脚手架
-│   └── progress_tracker.py     #   目标进度监控
+│   ├── progress_tracker.py     #   目标进度监控
+│   └── assessment_engine.py    #   专家评估引擎（4维打分+LLM领域知识分析）
 │
 ├── output_layer/               # 第5层：自适应输出
 │   ├── output_adapter.py       #   格式适配
@@ -179,7 +181,7 @@ docker compose -f docker-compose-new.yml up -d
 | `LLM_API_KEY` | *必填* | LLM API密钥 |
 | `LLM_BASE_URL` | `https://api.deepseek.com/v1` | LLM API地址 |
 | `LLM_MODEL` | `deepseek-v4-pro` | 模型名称 |
-| `LLM_MAX_TOKENS` | `2048` | 最大响应token数 |
+| `LLM_MAX_TOKENS` | `1024` | 最大响应token数 |
 | `LLM_TEMPERATURE` | `0.7` | LLM温度 |
 | `STT_MODEL` | `qwen3-tts-vd-2026-01-26` | 语音转文字模型 |
 | `EMBEDDING_MODEL` | `deepseek-v4-pro` | 嵌入模型 |
@@ -236,6 +238,12 @@ docker compose -f docker-compose-new.yml up -d
 | `GET` | `/api/profile/status` | 是 | 检查画像完整度 |
 | `GET` | `/api/profile/discover` | 是 | 获取探索性问题 |
 | `GET/POST` | `/api/goals` | 是 | 列出/添加目标 |
+| `POST` | `/api/goals/{id}/assess` | 是 | 对目标执行专家评估 |
+| `GET` | `/api/goals/{id}/assessment` | 是 | 获取目标评估历史 |
+| `POST` | `/api/goals/{id}/assess/verify` | 是 | 验证环节（对比基线） |
+| `POST` | `/api/goals/{id}/learn/start` | 是 | 开启学习环节 |
+| `POST` | `/api/goals/{id}/learn/answer` | 是 | 提交学习回答 |
+| `GET` | `/api/goals/{id}/trend` | 是 | 获取进度趋势 |
 | `GET/POST` | `/api/abilities` | 是 | 列出/添加能力 |
 | `GET` | `/api/poll` | 是 | 轮询自主消息 |
 | `GET` | `/api/status` | 是 | 获取Agent状态概览 |
@@ -275,6 +283,9 @@ docker compose -f docker-compose-new.yml up -d
 | `gaps` | 能力差距 | 描述、严重程度 |
 | `plans` | 成长计划 | 步骤JSON |
 | `topic_entries` | 主题记忆条目 | 主题、关键词、要点 |
+| `goal_dimensions` | 目标4维拆解 | 维度名、权重、得分 |
+| `assessment_records` | 评估记录 | 阶段、维度得分JSON、综合得分、短板、建议 |
+| `learning_sessions` | 学习会话 | 类型（learn/answer/review）、内容、AI反馈 |
 
 ## 架构说明
 

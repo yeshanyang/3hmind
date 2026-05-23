@@ -24,18 +24,27 @@ function startPolling() {
 function setupIdleFollowUp() {
   const input = document.getElementById('chatInput');
   if (!input) return;
-  input.addEventListener('input', () => {
-    if (followUpTimer && autoAskEnabled) {
+
+  // 用户开始输入时重置追问计时器
+  function resetOnActivity() {
+    if (!autoAskEnabled) return;
+    if (followUpTimer) {
       clearTimeout(followUpTimer);
       followUpTimer = null;
-      if (_followUpCount < MAX_FOLLOW_UPS) {
-        const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 8) * 1000;
-        followUpTimer = setTimeout(async () => {
-          followUpTimer = null;
-          await tryAskFollowUp();
-        }, delay);
-      }
     }
+    // 如果输入框有内容，不重新调度 — 等用户发送后再由 sendChat/sendStreamChat 调度
+    const hasText = input.value.trim().length > 0;
+    if (!hasText && _followUpCount < MAX_FOLLOW_UPS) {
+      // 空输入框说明用户已发送消息，由 chat 完成处理调度
+      // 不做任何事
+    }
+  }
+
+  input.addEventListener('input', resetOnActivity);
+  input.addEventListener('focus', resetOnActivity);
+  input.addEventListener('keydown', (e) => {
+    // 非回车键说明用户在输入，重置追问
+    if (e.key !== 'Enter') resetOnActivity();
   });
 }
 

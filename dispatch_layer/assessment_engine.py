@@ -96,6 +96,8 @@ class AssessmentEngine:
         """对指定目标执行完整评估"""
         self.db.seed_goal_dimensions(goal_id)
         dims = self.db.get_goal_dimensions(goal_id)
+        goal = self.db.get_goal(goal_id)
+        goal_name = goal.get("goal", "") if goal else ""
 
         dim_scores = {}
         weaknesses = []
@@ -108,10 +110,14 @@ class AssessmentEngine:
                 weaknesses.append({"dimension": d["name"], "score": score,
                                    "threshold": self.RULES[d["name"]]["pass_threshold"],
                                    "gap": self.RULES[d["name"]]["pass_threshold"] - score})
-                suggestions.append(self._generate_suggestion(d["name"], score))
+
+        # 用领域知识分析替代泛泛建议
+        if weaknesses:
+            sessions = self.db.get_learning_sessions(goal_id)
+            suggestions = self._generate_domain_suggestions(goal_name, weaknesses, sessions)
 
         composite = self._calc_composite(dim_scores)
-        feedback_text = self._build_feedback(composite, weaknesses, suggestions)
+        feedback_text = self._build_feedback(composite, weaknesses, suggestions, goal_name)
 
         record_id = self.db.add_assessment_record(
             goal_id=goal_id, phase=phase, dimension_scores=dim_scores,
@@ -142,6 +148,9 @@ class AssessmentEngine:
         if not dims:
             self.db.seed_goal_dimensions(goal_id)
             dims = self.db.get_goal_dimensions(goal_id)
+
+        goal = self.db.get_goal(goal_id)
+        goal_name = goal.get("goal", "") if goal else ""
 
         # 收集历史学习会话数据
         sessions = self.db.get_learning_sessions(goal_id)
@@ -201,10 +210,14 @@ class AssessmentEngine:
                 weaknesses.append({"dimension": name, "score": score,
                                    "threshold": rules["pass_threshold"],
                                    "gap": rules["pass_threshold"] - score})
-                suggestions.append(self._generate_suggestion(name, score))
+
+        # 用 LLM 领域知识分析替代泛泛建议（一次调用覆盖所有薄弱维度）
+        if weaknesses:
+            suggestions = self._generate_domain_suggestions(
+                goal_name, weaknesses, sessions, user_content)
 
         composite = self._calc_composite(dim_scores)
-        feedback_text = self._build_feedback(composite, weaknesses, suggestions)
+        feedback_text = self._build_feedback(composite, weaknesses, suggestions, goal_name)
 
         record_id = self.db.add_assessment_record(
             goal_id=goal_id, phase=phase, dimension_scores=dim_scores,
@@ -377,41 +390,149 @@ class AssessmentEngine:
             total += ds["score"] * ds["weight"]
         return round(total, 1)
 
-    def _generate_suggestion(self, dim_name: str, score: float) -> dict:
-        """根据维度生成改进建议"""
+    def _generate_domain_suggestions(self, goal_name: str, weaknesses: list,
+                                       sessions: list, user_content: str = "") -> list:
+        """LLM 驱动的领域知识分析：根据目标领域深入推理，生成具体的知识缺口和学习计划"""
+        if not self.reasoning:
+            return [self._generate_suggestion_rule(w["dimension"], w["score"]) for w in weaknesses]
+
+        # 提取用户已展示的知识
+        known_content = []
+        for s in sessions[-10:]:
+            resp = s.get("user_response", "") or s.get("content", "")
+            if resp:
+                known_content.append(resp[:300])
+        known_text = "\n".join(known_content) if known_content else "（用户尚未展示任何知识）"
+
+        weak_desc = "\n".join(
+            f"- {w['dimension']}: {w['score']}分 (合格线{w['threshold']}分，差{w['gap']}分)"
+            for w in weaknesses)
+
+        prompt = f"""你是「{goal_name}」领域的专家。用户在此目标上有以下薄弱维度：
+
+{weak_desc}
+
+用户已展示的知识（学习会话记录）：
+{known_text}
+
+用户最新输出：
+{user_content[:1000] if user_content else "（无）"}
+
+请深入分析此目标领域，返回以下格式的JSON：
+{{
+  "domain_knowledge": [
+    "此领域核心知识点1（具体名称，不是泛泛而谈）",
+    "此领域核心知识点2",
+    ...
+  ],
+  "user_known": ["用户已掌握的知识点1", ...],
+  "user_gaps": [
+    {{
+      "item": "用户缺失的具体知识点名称",
+      "why_important": "为什么这个知识点对此目标至关重要",
+      "learn_how": "具体如何学习这个知识点（给出具体资源/方法/步骤，不是空话）"
+    }},
+    ...
+  ],
+  "concrete_plan": {{
+    "week1": "本周具体要完成的学习任务（精确到内容，不是时间分配）",
+    "week2": "第二周具体学习任务",
+    "week3": "第三周具体学习任务",
+    "week4": "第四周具体学习任务"
+  }}
+}}
+
+关键要求：
+1. domain_knowledge 必须是此领域真实、具体的知识点名称，不能写"了解领域全局"等空话
+2. user_gaps 要剔除用户已掌握的内容，只列用户不知道的
+3. learn_how 必须给出具体资源、方法、步骤，不能写"系统学习""制定计划"等
+4. concrete_plan 必须精确到具体的知识内容，不能只写"每天学习X小时"
+5. 如果你不确定此领域的知识体系，请基于你的知识深入推理，给出你能想到的最具体的知识点
+6. 直接返回JSON，不要加任何前缀或代码块标记"""
+
+        try:
+            from reasoning.reasoning_layer import ReasoningLayer
+            if isinstance(self.reasoning, ReasoningLayer):
+                resp = self.reasoning._call_llm(
+                    "你是各领域的知识专家。请深入分析用户的目标领域，返回具体、可操作的知识评估。只返回JSON。",
+                    prompt)
+            else:
+                resp = ""
+            import re
+            match = re.search(r'\{[\s\S]*\}', resp) if resp else None
+            llm_result = json.loads(match.group()) if match else {}
+        except Exception:
+            llm_result = {}
+
+        # 将 LLM 结果转换为维度建议
+        suggestions = []
+        gaps = llm_result.get("user_gaps", [])
+        plan = llm_result.get("concrete_plan", {})
+
+        for w in weaknesses:
+            dim_name = w["dimension"]
+            # 为每个薄弱维度生成具体建议
+            if dim_name == "知识掌握":
+                gap_items = [f"{g['item']}（{g.get('why_important', '')}）" for g in gaps[:5]]
+                action = f"【待掌握知识点】" + "；".join(gap_items) if gap_items else f"围绕「{goal_name}」补充核心概念"
+                methods = [f"学习{g['item']}: {g.get('learn_how', '')}" for g in gaps[:3]]
+                method = " | ".join(methods) if methods else "搜索并学习上述知识点的最佳实践和教程"
+            elif dim_name == "学习进度":
+                plan_text = " → ".join(f"{k}: {v}" for k, v in plan.items()) if plan else f"分4周推进「{goal_name}」学习"
+                action = f"【具体学习计划】{plan_text}"
+                method = "按上述周计划执行，每周日检查完成情况并调整下周内容"
+            elif dim_name == "复盘迭代":
+                action = f"针对「{goal_name}」的每次学习做记录：学了什么→哪里没懂→怎么解决的→下次如何改进"
+                method = "每周复盘时对照上述知识缺口清单，标记已掌握的知识点，更新剩余缺口"
+            elif dim_name == "深度思考":
+                gap_questions = "；".join(f"为什么{g['item']}对该领域重要？" for g in gaps[:3])
+                action = gap_questions if gap_questions else f"对「{goal_name}」涉及的每个知识点追问3层为什么"
+                method = "写一篇关于此领域的技术总结，输出自己的原创理解和框架"
+            else:
+                action = f"针对「{dim_name}」开展专项提升"
+                method = "记录过程，每周检查进展"
+
+            suggestions.append({
+                "dimension": dim_name,
+                "action": action,
+                "method": method,
+                "current_score": w["score"],
+                "target": w["threshold"],
+            })
+
+        return suggestions
+
+    def _generate_suggestion_rule(self, dim_name: str, score: float) -> dict:
+        """规则回退：根据维度生成改进建议（比之前更具体）"""
         suggestions_map = {
             "知识掌握": {
-                "action": "系统性梳理该领域的知识图谱，列出待学知识点清单",
-                "method": "使用费曼学习法：尝试用自己的话解释每个知识点",
-                "resource": "推荐阅读相关文档/教程/论文，做笔记并整理思维导图",
+                "action": "列出此领域5个核心知识点，标记已掌握/未掌握，优先补充最薄弱的一项",
+                "method": "搜索每个知识点的最佳学习资源（官方文档/权威教程/论文），逐个攻克",
             },
             "学习进度": {
-                "action": "制定具体到周的学习计划，细分每日任务",
-                "method": "使用番茄工作法，每天固定学习时间",
-                "resource": "使用进度追踪工具，记录每日学习时长和内容",
+                "action": "将目标拆解为4个周里程碑，每周聚焦1个核心知识点",
+                "method": "每个里程碑设定可验证的产出物（项目/文章/测验），以产出驱动进度",
             },
             "复盘迭代": {
-                "action": "建立定期复盘习惯（建议每周一次）",
-                "method": "复盘模板：做了什么→遇到什么问题→如何解决→学到了什么→下次如何改进",
-                "resource": "记录复盘日志，定期回顾之前的复盘记录",
+                "action": "每次学习后记录：学了什么→哪里没懂→怎么解决的→下次如何改进",
+                "method": "每周回顾复盘日志，标记已解决和反复出现的问题，针对性调整",
             },
             "深度思考": {
-                "action": "对每个学习主题提出3个为什么，层层追问",
-                "method": "练习将大问题拆解为可执行的子问题",
-                "resource": "写作输出：定期写学习总结、技术博客或分享笔记",
+                "action": "对每个学到的知识点，用自己的话写出原理、应用场景、局限性",
+                "method": "选择此领域一个争议性话题，写出正反方论据和自己的判断",
             },
         }
         s = suggestions_map.get(dim_name, {
             "action": "加强该维度的学习和实践",
             "method": "记录过程并定期检查改进",
-            "resource": "寻找相关学习资料和案例",
         })
         s["dimension"] = dim_name
         s["current_score"] = score
         s["target"] = self.RULES.get(dim_name, {}).get("pass_threshold", 60)
         return s
 
-    def _build_feedback(self, composite: float, weaknesses: list, suggestions: list) -> str:
+    def _build_feedback(self, composite: float, weaknesses: list, suggestions: list,
+                        goal_name: str = "") -> str:
         """生成评估反馈摘要"""
         if composite >= 90:
             level = "优秀"
@@ -426,8 +547,10 @@ class AssessmentEngine:
 
         lines = [
             f"综合达成率: {composite:.1f}% — 等级: {level}",
-            "",
         ]
+        if goal_name:
+            lines.append(f"目标: {goal_name}")
+        lines.append("")
         if weaknesses:
             lines.append("短板:")
             for w in weaknesses:

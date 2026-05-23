@@ -340,15 +340,15 @@ async function assessGoal(id) {
       return `  ${k} [${bar}] ${v.score}分 (权重${(v.weight*100).toFixed(0)}%)`;
     }).join('\n');
 
-    const weakLines = (data.weaknesses || []).length > 0
-      ? '\n\n短板:\n' + data.weaknesses.map(w => `  ⚠ ${w.dimension}: ${w.score}分 (差${w.gap}分达标)`).join('\n')
-      : '';
-
     const sugLines = (data.suggestions || []).length > 0
-      ? '\n\n改进建议:\n' + data.suggestions.map(s => `  ▶ ${s.dimension}: ${s.action}`).join('\n')
+      ? '\n\n改进建议:\n' + data.suggestions.map(s => {
+          let lines = `  ▶ ${s.dimension}: ${s.action}`;
+          if (s.method) lines += `\n    方法: ${s.method}`;
+          return lines;
+        }).join('\n')
       : '';
 
-    const report = `[专家评估报告]\n综合达成率: ${data.composite_score}%\n\n维度得分:\n${dimLines}${weakLines}${sugLines}\n\n${data.feedback || ''}`;
+    const report = `[专家评估报告]\n${data.feedback || '综合达成率: ' + data.composite_score + '%'}\n\n维度得分:\n${dimLines}`;
     addMessage(report, 'agent', true);
 
     loadGoals();

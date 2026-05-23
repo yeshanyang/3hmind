@@ -8,9 +8,10 @@ let synth = window.speechSynthesis;
 let synthReady = false;
 let synthVoice = null;
 
-// 对话模式状态机
+// 语音在线模式
 let convMode = false;
 let convState = 'idle';       // idle | listening | processing | speaking
+let _exitingVoiceMode = false;
 let autoSpeakEnabled = true;
 let micGated = false;
 
@@ -49,7 +50,7 @@ let cameraStream = null;
 let followUpTimer = null;
 let _followUpCount = 0;
 const MAX_FOLLOW_UPS = 3;
-const FOLLOW_UP_DELAYS = [8, 15, 25];
+const FOLLOW_UP_DELAYS = [10, 20, 30];
 
 let ttsInterrupted = false;
 

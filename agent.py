@@ -66,15 +66,15 @@ class UnifiedAgent:
         # 1. 标准化输入
         uinput = self.input_parser.parse(text, context_type, context_summary)
 
-        # 2. 深层意图解析
-        profile_context = self.mind.get_context_for_llm(text)
-        intent = self.intent_parser.parse(uinput.preprocessed_text, profile_context)
-
-        # 3. 检索相关记忆
+        # 2. 一次性收集所有上下文（避免重复查询 SQLite/ChromaDB/话题）
         memory_context = self.mind.get_context_for_llm(text)
 
-        # 4. LLM 分析
-        analysis = self.reasoning.analyze_problem(uinput.preprocessed_text)
+        # 3. 深层意图解析
+        intent = self.intent_parser.parse(uinput.preprocessed_text, memory_context)
+
+        # 4. LLM 分析（传入预构建上下文，跳过 reasoning 层重复查询）
+        analysis = self.reasoning.analyze_problem(uinput.preprocessed_text,
+                                                   prebuilt_context=memory_context)
 
         # 5. 工具调度
         dispatch_results = self.dispatcher.execute(intent, self.thinking_guide, self.progress_tracker)
@@ -103,8 +103,9 @@ class UnifiedAgent:
         """流式聊天 — 兼容旧 API"""
         self.mind.add_history(entry_type="chat", content=question,
                               metadata={"topic": question[:30]})
+        prebuilt = self.mind.get_context_for_llm(question)
         full_response = ""
-        for token in self.reasoning.analyze_problem_stream(question):
+        for token in self.reasoning.analyze_problem_stream(question, prebuilt_context=prebuilt):
             full_response += token
             yield token
         self._auto_update_profile(f"用户: {question}\nAI: {full_response}")

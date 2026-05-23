@@ -28,16 +28,13 @@
   synth.speak(warmUtterance);
 })();
 
-// ==================== 对话模式开关（已简化 — 在线对话按钮已移除） ====================
+// ==================== 语音在线模式（通过麦克风按钮切换） ====================
 function toggleConversationMode() {
-  convMode = !convMode;
-  if (convMode) {
-    setConvState('idle');
-  } else {
-    stopListening();
-    setConvState('idle');
-    if (inquiryActive) stopInquiry();
-  }
+  // 关闭语音模式
+  convMode = false;
+  stopListening();
+  setConvState('idle');
+  if (inquiryActive) stopInquiry();
 }
 
 function forceStopTTS() {
@@ -77,6 +74,7 @@ function toggleAutoAsk() {
 }
 
 function stopAll() {
+  convMode = false;
   stopRecognition();
   cleanupMediaRecorder();
   document.getElementById('chatInput').value = '';
@@ -92,6 +90,7 @@ function stopAll() {
   ttsInterrupted = false;
   _restartCount = 0;
   _hasSpoken = false;
+  _exitingVoiceMode = false;
   setConvState('idle');
   document.getElementById('btnStopAll').style.display = 'none';
 }
@@ -123,7 +122,9 @@ function setConvState(state) {
   micBtn.classList.remove('active', 'conv-active');
   if (state === 'listening') {
     micBtn.classList.add('active');
-    if (convMode) micBtn.classList.add('conv-active');
+  }
+  if (convMode) {
+    micBtn.classList.add('conv-active');
   }
 }
 
@@ -144,18 +145,39 @@ function detectStopIntent(text) {
 
 // ==================== 语音识别 (Web Speech API) ====================
 function toggleMic() {
+  // 如果正在退出语音模式
+  if (_exitingVoiceMode) return;
+
   if (_useMediaRecorder) {
     if (convState === 'listening') {
       stopMediaRecord();
+      if (!convMode) {
+        // 录音结束，发送
+        sendChat();
+      }
     } else if (!micGated) {
+      convMode = true;
       startMediaRecord();
     }
     return;
   }
-  if (convState === 'listening') {
+
+  if (convMode) {
+    // 已在语音模式 — 关闭
+    convMode = false;
     stopListening();
-  } else if (!micGated) {
-    startListening();
+    setConvState('idle');
+    document.getElementById('chatInput').placeholder = '输入你想聊的话题...';
+    resetFollowUpChain();
+    addMessage('[语音] 语音模式已关闭。', 'system');
+  } else {
+    // 开启语音模式
+    convMode = true;
+    setConvState('idle');
+    if (!micGated) {
+      startListening();
+    }
+    addMessage('[语音] 语音模式已开启，开始说话吧。', 'system');
   }
 }
 
@@ -520,7 +542,7 @@ function stopListening() {
   _useMediaRecorder = false;
   _networkErrCount = 0;
   setConvState('idle');
-  document.getElementById('chatInput').placeholder = convMode ? '点击麦克风开始对话...' : '输入你想聊的话题...';
+  document.getElementById('chatInput').placeholder = convMode ? '正在聆听... (点击麦克风继续)' : '输入你想聊的话题...';
 }
 
 // ==================== TTS 通用朗读 ====================
@@ -588,11 +610,31 @@ function scheduleNextFollowUp() {
   if (_followUpCount >= MAX_FOLLOW_UPS) return;
   if (!autoAskEnabled) return;
 
-  const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 8) * 1000;
+  // 检查用户是否正在输入 — 如果有文字未发送，延后追问
+  const input = document.getElementById('chatInput');
+  const hasPendingText = input && input.value.trim().length > 0;
+  if (hasPendingText || (convMode && convState === 'listening')) {
+    // 用户正在输入或语音聆听中，延后 3 秒重新检查
+    followUpTimer = setTimeout(() => {
+      followUpTimer = null;
+      scheduleNextFollowUp();
+    }, 3000);
+    return;
+  }
+
+  const delay = (FOLLOW_UP_DELAYS[_followUpCount] || 10) * 1000;
   followUpTimer = setTimeout(async () => {
     followUpTimer = null;
     await tryAskFollowUp();
   }, delay);
+}
+
+function _isUserActive() {
+  const input = document.getElementById('chatInput');
+  if (input && input.value.trim().length > 0) return true;
+  if (convMode && convState === 'listening') return true;
+  if (convState === 'speaking') return true;
+  return false;
 }
 
 function speakAndResume(msgDiv, text) {
