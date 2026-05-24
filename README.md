@@ -60,7 +60,7 @@ API概览 — 30+路由分6类列出
 | **认证** | JWT（python-jose）+ bcrypt密码哈希 |
 | **用户存储** | JSON文件（`data/users.json`） |
 | **前端** | 原生 JS + HTML + CSS（SPA单页应用） |
-| **容器化** | Docker + Docker Compose |
+| **容器化** | Docker + Docker Compose + Docker构建规范 |
 | **反向代理** | Caddy（HTTPS + 域名路由） |
 | **配置管理** | `.env` + pydantic-settings |
 

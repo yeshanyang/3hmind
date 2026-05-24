@@ -43,9 +43,15 @@
   </div>
   <div class="section">
     <h3>输入模式 (预留)</h3>
+    <h4 style="font-size:10px;color:#64748b;margin:8px 0 4px;">— 文件与设备输入</h4>
     <button class="btn sub-btn" onclick="openMediaModal('audio')">麦克风设备输入</button>
     <button class="btn sub-btn" onclick="openMediaModal('video')">摄像头 / 视频输入</button>
     <button class="btn sub-btn" onclick="openMediaModal('document')">文档资料输入</button>
+    <h4 style="font-size:10px;color:#64748b;margin:8px 0 4px;">— 流式硬件接入 (预留)</h4>
+    <button class="btn sub-btn" onclick="openMediaModal('camera_stream')" title="外部摄像头 RTSP/RTMP 流式接入">外部摄像头流接入</button>
+    <button class="btn sub-btn" onclick="openMediaModal('audio_stream')" title="外置麦克风 / 在线音频流 (RTMP/WebRTC) 接入">外置话筒 / 在线音频流</button>
+    <button class="btn sub-btn" onclick="openMediaModal('bci')" title="脑机接口 (EEG/BCI) 数据流接入 — 脑部数据采集">脑机接口入口</button>
+    <button class="btn sub-btn" onclick="openMediaModal('somatosensory')" title="体感检测 / 机器人触觉传感器数据接入">体感检测入口</button>
   </div>
   <div class="section">
     <h3>个人画像</h3>
@@ -96,14 +102,14 @@
   <div class="header">
     <h1>3hmind 自我成长智能体</h1>
     <div class="header-right">
-      <button class="conv-toggle" id="convToggle" onclick="toggleConversationMode()" title="开启在线语音对话模式">
-        <span class="toggle-dot"></span> 在线对话
-      </button>
       <button class="speak-toggle on" id="speakToggle" onclick="toggleAutoSpeak()" title="语音播报 — 自动朗读 AI 回复">
         <span class="toggle-dot"></span> 语音播报
       </button>
-      <button class="ask-toggle" id="askToggle" onclick="toggleAutoAsk()" title="AI 主动追问 — 回复后自动提出问题引导继续对话">
+      <button class="ask-toggle on" id="askToggle" onclick="toggleAutoAsk()" title="AI 主动追问 — 回复后自动提出问题引导继续对话">
         <span class="toggle-dot"></span> AI追问
+      </button>
+      <button class="conv-toggle" id="convToggle" onclick="toggleConversationMode()" title="开启在线语音对话模式">
+        <span class="toggle-dot"></span> 在线对话
       </button>
       <button class="btn-stop" id="btnStopAll" onclick="stopAll()" title="停止当前对话/追问/朗读" style="display:none;">停止</button>
       <span style="font-size:13px;color:#94a3b8;">
@@ -113,24 +119,19 @@
     </div>
   </div>
 
-  <div class="conv-bar idle show" id="convBar">
-    在线对话模式已关闭，点击右上角「在线对话」开启语音连续对话
-  </div>
-
   <div class="chat-area" id="chatArea">
     <div class="message agent">
 ==================================================
-  3hmind 自我成长智能体 v2.1
-  在线语音连续对话模式
+  3hmind 自我成长智能体 v3.0
+  语音连续对话模式
 ==================================================
 
 使用方式:
-- 点击右上角「在线对话」开关，开启语音连续对话
-- 点击麦克风按钮开始说话
-- 说完后自动识别、自动发送、自动朗读回复
-- 朗读完毕后自动继续监听，循环往复
-- 再次点击麦克风暂停对话
-- 关闭开关回到手动输入模式
+- 点击麦克风按钮开启语音连续对话
+- 开始说话，说完后自动识别、自动发送、自动朗读回复
+- AI 朗读完毕后自动继续聆听，循环往复
+- 再次点击麦克风按钮关闭语音模式
+- 点击「停止」按钮随时终止所有语音/TTS/追问
 
 也可以直接输入文字与我对话。
     </div>
@@ -149,10 +150,14 @@
   <div class="modal">
     <h3>多模态输入</h3>
     <div class="tabs">
-      <button class="tab active" onclick="switchMediaTab('document')">文档输入</button>
-      <button class="tab" onclick="switchMediaTab('audio')">音频输入</button>
-      <button class="tab" onclick="switchMediaTab('video')">视频输入</button>
+      <button class="tab active" onclick="switchMediaTab('document')">文档</button>
+      <button class="tab" onclick="switchMediaTab('audio')">音频</button>
+      <button class="tab" onclick="switchMediaTab('video')">视频</button>
       <button class="tab" onclick="switchMediaTab('camera')">摄像头</button>
+      <button class="tab sub" onclick="switchMediaTab('camera_stream')" title="预留 — 外部摄像头流">外摄流</button>
+      <button class="tab sub" onclick="switchMediaTab('audio_stream')" title="预留 — 外部音频流">外音流</button>
+      <button class="tab sub" onclick="switchMediaTab('bci')" title="预留 — 脑机接口">脑机</button>
+      <button class="tab sub" onclick="switchMediaTab('somatosensory')" title="预留 — 体感检测">体感</button>
     </div>
 
     <div class="tab-content active" id="tab-document">
@@ -211,6 +216,80 @@
         <div class="btn-row" style="margin-top:12px;">
           <button class="btn-modal btn-secondary" id="camToggleBtn" onclick="toggleCamera()">开启摄像头</button>
           <button class="btn-modal btn-primary" id="camCaptureBtn" onclick="captureCamera()" disabled>拍照分析</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 预留: 流式硬件接入 placeholder tabs -->
+    <div class="tab-content" id="tab-camera_stream">
+      <div style="text-align:center;padding:40px;color:#64748b;">
+        <div style="font-size:36px;margin-bottom:8px;">&#127909;</div>
+        <div>外部摄像头流式接入</div>
+        <div class="hint" style="margin-top:8px;">预留 — 支持 RTSP / RTMP / WebRTC 协议拉流，对接外部摄像头实时视频流</div>
+        <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:8px;border:1px dashed #475569;">
+          <div style="font-size:11px;color:#64748b;">流地址</div>
+          <input type="text" placeholder="rtsp://192.168.1.100:554/stream" style="width:100%;padding:8px;background:#1e293b;border:1px solid #475569;border-radius:4px;color:#e2e8f0;font-size:12px;margin-top:4px;" disabled />
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn-modal btn-secondary" onclick="closeMediaModal()">关闭</button>
+          <button class="btn-modal btn-primary" disabled>接入 (预留)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-audio_stream">
+      <div style="text-align:center;padding:40px;color:#64748b;">
+        <div style="font-size:36px;margin-bottom:8px;">&#127897;</div>
+        <div>外置话筒 / 在线音频流</div>
+        <div class="hint" style="margin-top:8px;">预留 — 支持 RTMP / WebRTC / SRT 协议接入外部麦克风、在线音频流或远端拾音设备</div>
+        <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:8px;border:1px dashed #475569;">
+          <div style="font-size:11px;color:#64748b;">流地址 / 设备源</div>
+          <input type="text" placeholder="rtmp://192.168.1.100/live/audio" style="width:100%;padding:8px;background:#1e293b;border:1px solid #475569;border-radius:4px;color:#e2e8f0;font-size:12px;margin-top:4px;" disabled />
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn-modal btn-secondary" onclick="closeMediaModal()">关闭</button>
+          <button class="btn-modal btn-primary" disabled>接入 (预留)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-bci">
+      <div style="text-align:center;padding:40px;color:#64748b;">
+        <div style="font-size:36px;margin-bottom:8px;">&#129504;</div>
+        <div>脑机接口 (BCI)</div>
+        <div class="hint" style="margin-top:8px;">预留 — 接入 EEG 脑电设备 / BCI 脑机接口数据流，采集脑部认知状态数据</div>
+        <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:8px;border:1px dashed #475569;">
+          <div style="font-size:11px;color:#64748b;">设备类型 / 数据协议</div>
+          <select style="width:100%;padding:8px;background:#1e293b;border:1px solid #475569;border-radius:4px;color:#64748b;font-size:12px;margin-top:4px;" disabled>
+            <option>EEG 脑电图设备 (预留)</option>
+            <option>fNIRS 近红外光谱 (预留)</option>
+            <option>MEG 脑磁图接口 (预留)</option>
+          </select>
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn-modal btn-secondary" onclick="closeMediaModal()">关闭</button>
+          <button class="btn-modal btn-primary" disabled>接入 (预留)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-content" id="tab-somatosensory">
+      <div style="text-align:center;padding:40px;color:#64748b;">
+        <div style="font-size:36px;margin-bottom:8px;">&#129309;</div>
+        <div>体感检测入口</div>
+        <div class="hint" style="margin-top:8px;">预留 — 接入触觉传感器 / 机器人本体感知 / 姿态传感器 / 力反馈等体感数据流</div>
+        <div style="margin-top:16px;padding:12px;background:#0f172a;border-radius:8px;border:1px dashed #475569;">
+          <div style="font-size:11px;color:#64748b;">传感器类型</div>
+          <select style="width:100%;padding:8px;background:#1e293b;border:1px solid #475569;border-radius:4px;color:#64748b;font-size:12px;margin-top:4px;" disabled>
+            <option>触觉传感器阵列 (预留)</option>
+            <option>IMU 姿态传感器 (预留)</option>
+            <option>力/扭矩传感器 (预留)</option>
+            <option>温度/湿度传感器 (预留)</option>
+          </select>
+        </div>
+        <div class="btn-row" style="margin-top:16px;">
+          <button class="btn-modal btn-secondary" onclick="closeMediaModal()">关闭</button>
+          <button class="btn-modal btn-primary" disabled>接入 (预留)</button>
         </div>
       </div>
     </div>

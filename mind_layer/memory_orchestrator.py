@@ -13,6 +13,7 @@ from mind_layer.vector_kb import VectorKB
 from mind_layer.topic_memory import TopicMemoryStore
 from mind_layer.session_memory import SessionMemory
 from mind_layer.user_profile import UserProfile
+from dispatch_layer.assessment_engine import AssessmentEngine
 
 
 class MemoryOrchestrator:
@@ -24,11 +25,12 @@ class MemoryOrchestrator:
         self.topics = TopicMemoryStore(topics_dir=topics_dir, db=self.db)
         self.session = SessionMemory()
         self.profile = UserProfile(self.db)
+        self.assessment = AssessmentEngine(self.db)
 
 
     # ==================== 统一上下文（核心） ====================
 
-    def get_context_for_llm(self, question: str) -> str:
+    def get_context_for_llm(self, question: str, use_vector: bool = False) -> str:
         """一次性收集所有 LLM 所需上下文，替代 reasoning_layer 中的分散拼装"""
         parts = []
 
@@ -36,11 +38,6 @@ class MemoryOrchestrator:
         structured = self.db.get_all_for_context()
         if structured:
             parts.append(structured)
-
-        # 向量相似记忆
-        similar = self._search_similar(question)
-        if similar:
-            parts.append(f"相关记忆:\n{similar}")
 
         # 话题记忆
         topic_ctx = self.topics.get_context_for_llm(question)
@@ -51,6 +48,12 @@ class MemoryOrchestrator:
         session_ctx = self.session.get_context(5)
         if session_ctx:
             parts.append(f"最近对话:\n{session_ctx}")
+
+        # 向量相似记忆（默认跳过以提升响应速度）
+        if use_vector:
+            similar = self._search_similar(question)
+            if similar:
+                parts.append(f"相关记忆:\n{similar}")
 
         return "\n\n".join(parts)
 
@@ -104,6 +107,31 @@ class MemoryOrchestrator:
 
     def delete_goal(self, goal_id: int):
         self.db.delete_goal(goal_id)
+
+    def assess_goal(self, goal_id: int, phase: str = "baseline") -> dict:
+        return self.assessment.assess_goal(goal_id, phase)
+
+    def assess_with_llm(self, goal_id: int, phase: str = "baseline",
+                        user_content: str = "", reasoning=None) -> dict:
+        self.assessment.reasoning = reasoning
+        return self.assessment.assess_with_llm(goal_id, phase, user_content)
+
+    def start_learning_session(self, goal_id: int, content: str = "") -> dict:
+        return self.assessment.start_learning_session(goal_id, content)
+
+    def submit_learning_answer(self, goal_id: int, user_response: str) -> dict:
+        return self.assessment.submit_answer(goal_id, user_response)
+
+    def verify_goal(self, goal_id: int, user_content: str = "",
+                    reasoning=None) -> dict:
+        self.assessment.reasoning = reasoning
+        return self.assessment.verify_goal(goal_id, user_content)
+
+    def get_assessment_history(self, goal_id: int) -> list:
+        return self.assessment.get_assessment_history(goal_id)
+
+    def get_progress_trend(self, goal_id: int) -> dict:
+        return self.assessment.get_progress_trend(goal_id)
 
     def add_ability(self, name: str, level: str = "beginner", category: str = ""):
         self.db.add_ability(name, level, category)

@@ -8,14 +8,15 @@ let synth = window.speechSynthesis;
 let synthReady = false;
 let synthVoice = null;
 
-// 对话模式状态机
+// 语音在线模式
 let convMode = false;
 let convState = 'idle';       // idle | listening | processing | speaking
+let _exitingVoiceMode = false;
 let autoSpeakEnabled = true;
 let micGated = false;
 
 // AI 主动追问
-let autoAskEnabled = false;
+let autoAskEnabled = true;
 let lastUserMsg = '';
 let lastAiResponse = '';
 
@@ -30,6 +31,8 @@ let waitingForInquiryAnswer = false;
 
 // 语音输入
 let voiceTranscript = '';
+let voiceInputActive = false;    // 语音输入框是否处于活跃输入状态
+let voiceFinalText = '';         // 语音识别最终文本
 let silenceTimer = null;
 let silenceCountdown = 0;
 let countdownInterval = null;
@@ -39,6 +42,16 @@ let _useMediaRecorder = false;
 let mediaRecorder = null;
 let mediaChunks = [];
 let _lastInputWasVoice = false;
+let _savedTypedText = '';        // 保存用户在语音启动前手动输入的文本
+let _voicePaused = false;        // 语音对话模式中临时暂停（手动打断去打字）
+let _typingWatchTimer = null;    // 打字结束后自动恢复语音的计时器
+
+// 语音输入结束词 — 检测到后结束当次语音输入（区别于 STOP_PHRASES 的停止对话）
+const VOICE_INPUT_END_PHRASES = [
+  '说完了', '就这样', '完毕', '好了', '可以了',
+  '就这些', '先这样', '讲完了', '就到这里',
+  '以上', '发送', '确认发送',
+];
 
 // 文件上传
 let selectedFile = null;
@@ -49,7 +62,7 @@ let cameraStream = null;
 let followUpTimer = null;
 let _followUpCount = 0;
 const MAX_FOLLOW_UPS = 3;
-const FOLLOW_UP_DELAYS = [20, 20, 40];
+const FOLLOW_UP_DELAYS = [10, 20, 30];
 
 let ttsInterrupted = false;
 
@@ -61,7 +74,7 @@ let _ttsActive = false;
 
 // 静音检测常量
 const SILENCE_LONG = 10;
-const SILENCE_SHORT = 2;
+const SILENCE_SHORT = 3;
 
 // 句尾检测模式
 const SENTENCE_END_PATTERNS = [

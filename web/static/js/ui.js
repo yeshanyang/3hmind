@@ -61,8 +61,11 @@ function closeMediaModal() {
 function switchMediaTab(tab) {
   document.querySelectorAll('.modal .tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.modal .tab-content').forEach(c => c.classList.remove('active'));
-  window.event.target.classList.add('active');
-  document.getElementById('tab-' + tab).classList.add('active');
+  // 激活对应的 tab 按钮 — 基于 onclick 参数匹配，避免依赖 window.event
+  const tabBtn = document.querySelector('.modal .tab[onclick*=\"switchMediaTab(\\\'' + tab + '\\\'\")]');
+  if (tabBtn) tabBtn.classList.add('active');
+  const content = document.getElementById('tab-' + tab);
+  if (content) content.classList.add('active');
   if (tab !== 'camera') stopCamera();
 }
 
@@ -296,6 +299,7 @@ async function loadGoals() {
         <div class="goal-name-row" onclick="advanceGoal(${g.id},${pct})" style="cursor:pointer;">
           <span class="goal-name">${escHtml(g.goal)}</span>
           <span class="goal-pct">${pct}%</span>
+          <button class="goal-assess" onclick="event.stopPropagation();assessGoal(${g.id})" title="专家评估">&#9733;</button>
           <button class="goal-del" onclick="event.stopPropagation();deleteGoal(${g.id})" title="删除">&times;</button>
         </div>
         <div class="goal-bar-outer"><div class="goal-bar-inner ${barClass}" style="width:${pct}%"></div></div>
@@ -323,6 +327,39 @@ async function advanceGoal(id, currentPct) {
     });
     loadGoals();
   } catch(e) { addMessage('更新进度失败: ' + e.message, 'system'); }
+}
+
+async function assessGoal(id) {
+  addMessage('[评估] 正在对目标进行专家系统评估...', 'system');
+  showTyping();
+  try {
+    const resp = await api('/api/goals/' + id + '/assess', { method: 'POST' });
+    const data = await resp.json();
+    removeTyping();
+
+    const dims = data.dimension_scores || {};
+    const dimLines = Object.entries(dims).map(([k, v]) => {
+      const bar = '#'.repeat(Math.round(v.score / 10)) + '-'.repeat(10 - Math.round(v.score / 10));
+      return `  ${k} [${bar}] ${v.score}分 (权重${(v.weight*100).toFixed(0)}%)`;
+    }).join('\n');
+
+    const sugLines = (data.suggestions || []).length > 0
+      ? '\n\n改进建议:\n' + data.suggestions.map(s => {
+          let lines = `  ▶ ${s.dimension}: ${s.action}`;
+          if (s.method) lines += `\n    方法: ${s.method}`;
+          return lines;
+        }).join('\n')
+      : '';
+
+    const report = `[专家评估报告]\n${data.feedback || '综合达成率: ' + data.composite_score + '%'}\n\n维度得分:\n${dimLines}`;
+    addMessage(report, 'agent', true);
+
+    loadGoals();
+    saveChatHistory();
+  } catch(e) {
+    removeTyping();
+    addMessage('评估失败: ' + e.message, 'system');
+  }
 }
 
 function escHtml(s) {

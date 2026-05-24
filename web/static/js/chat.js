@@ -51,6 +51,8 @@ function _ttsResetQueue() {
 async function sendStreamChat(msg, contextType) {
   if (sendLocked) return;
   sendLocked = true;
+  _voicePaused = false;
+  if (typeof _stopTypingWatch === 'function') _stopTypingWatch();
 
   if (inquiryActive && waitingForInquiryAnswer) {
     sendLocked = false;
@@ -176,8 +178,8 @@ async function sendStreamChat(msg, contextType) {
   if (finalText && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
     if (convMode) {
       startListening();
-      scheduleNextFollowUp();
     }
+    scheduleNextFollowUp();
   }
   setConvState(convMode ? 'idle' : 'idle');
   sendLocked = false;
@@ -188,6 +190,8 @@ async function sendChat() {
   if (sendLocked) return;
   sendLocked = true;
   _lastInputWasVoice = false;
+  _voicePaused = false;
+  if (typeof _stopTypingWatch === 'function') _stopTypingWatch();
 
   const input = document.getElementById('chatInput');
   const msg = input.value.trim();
@@ -230,6 +234,7 @@ async function sendChat() {
 
     if (responseText && responseText.length > 5 && !responseText.startsWith('错误')) {
       setConvState('speaking');
+      scheduleNextFollowUp();
       if (convMode) {
         speakAndResume(msgDiv, responseText).then(() => { sendLocked = false; });
         return;
@@ -305,6 +310,15 @@ async function loadDashboard() {
 // ==================== AI 主动追问 ====================
 async function tryAskFollowUp() {
   if (_followUpCount >= MAX_FOLLOW_UPS) return;
+  if (!autoAskEnabled) return;
+
+  // 追问前再次确认用户不在输入中 — 避免打断用户
+  if (typeof _isUserActive === 'function' && _isUserActive()) {
+    // 用户正在活动，延后 3 秒重新检查
+    scheduleNextFollowUp();
+    return;
+  }
+
   _followUpCount++;
 
   try {
@@ -318,6 +332,13 @@ async function tryAskFollowUp() {
     });
     const data = await resp.json();
     if (!data.question) { scheduleNextFollowUp(); return; }
+
+    // API 返回后再次确认用户状态
+    if (typeof _isUserActive === 'function' && _isUserActive()) {
+      _followUpCount--;
+      scheduleNextFollowUp();
+      return;
+    }
 
     const askDiv = document.createElement('div');
     askDiv.className = 'message agent';
@@ -374,10 +395,6 @@ async function startInquiry() {
     document.getElementById('inquiryTopicInput').style.display = 'none';
 
     addMessage(`[深度对话] 开始「${data.topic}」— 共 ${data.total} 个问题`, 'system');
-
-    if (!convMode) {
-      toggleConversationMode();
-    }
 
     const firstQ = data.questions[0].text;
     const qDiv = document.createElement('div');

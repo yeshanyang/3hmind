@@ -66,15 +66,15 @@ class UnifiedAgent:
         # 1. 标准化输入
         uinput = self.input_parser.parse(text, context_type, context_summary)
 
-        # 2. 深层意图解析
-        profile_context = self.mind.get_context_for_llm(text)
-        intent = self.intent_parser.parse(uinput.preprocessed_text, profile_context)
-
-        # 3. 检索相关记忆
+        # 2. 一次性收集所有上下文（避免重复查询 SQLite/ChromaDB/话题）
         memory_context = self.mind.get_context_for_llm(text)
 
-        # 4. LLM 分析
-        analysis = self.reasoning.analyze_problem(uinput.preprocessed_text)
+        # 3. 深层意图解析
+        intent = self.intent_parser.parse(uinput.preprocessed_text, memory_context)
+
+        # 4. LLM 分析（传入预构建上下文，跳过 reasoning 层重复查询）
+        analysis = self.reasoning.analyze_problem(uinput.preprocessed_text,
+                                                   prebuilt_context=memory_context)
 
         # 5. 工具调度
         dispatch_results = self.dispatcher.execute(intent, self.thinking_guide, self.progress_tracker)
@@ -103,11 +103,25 @@ class UnifiedAgent:
         """流式聊天 — 兼容旧 API"""
         self.mind.add_history(entry_type="chat", content=question,
                               metadata={"topic": question[:30]})
+        prebuilt = self.mind.get_context_for_llm(question)
         full_response = ""
-        for token in self.reasoning.analyze_problem_stream(question):
+        for token in self.reasoning.analyze_problem_stream(question, prebuilt_context=prebuilt):
             full_response += token
             yield token
         self._auto_update_profile(f"用户: {question}\nAI: {full_response}")
+
+    def refine_voice_text(self, raw_text: str) -> str:
+        """语音输入后处理：修复识别错误，保障语义顺畅"""
+        if not raw_text or len(raw_text.strip()) < 3:
+            return raw_text
+        try:
+            refined = self.reasoning._call_llm(
+                "你是语音转文字润色助手。修正同音错字和语法错误，保持原意，使表达流畅自然。直接输出润色后文本，不要解释。",
+                raw_text
+            )
+            return refined.strip() if refined else raw_text
+        except Exception:
+            return raw_text
 
     def review(self) -> str:
         return self.reasoning.reflect()
@@ -129,6 +143,24 @@ class UnifiedAgent:
 
     def update_goal_progress(self, goal_id: int, progress: int):
         self.mind.update_goal_progress(goal_id, progress)
+
+    def assess_goal(self, goal_id: int, phase: str = "baseline") -> dict:
+        return self.mind.assess_with_llm(goal_id, phase, reasoning=self.reasoning)
+
+    def start_learning_session(self, goal_id: int, content: str = "") -> dict:
+        return self.mind.start_learning_session(goal_id, content)
+
+    def submit_learning_answer(self, goal_id: int, user_response: str) -> dict:
+        return self.mind.submit_learning_answer(goal_id, user_response)
+
+    def verify_goal(self, goal_id: int, user_content: str = "") -> dict:
+        return self.mind.verify_goal(goal_id, user_content, reasoning=self.reasoning)
+
+    def get_assessment_history(self, goal_id: int) -> list:
+        return self.mind.get_assessment_history(goal_id)
+
+    def get_goal_trend(self, goal_id: int) -> dict:
+        return self.mind.get_progress_trend(goal_id)
 
     def add_ability(self, name: str, level: str = "beginner"):
         self.mind.add_ability(name, level)

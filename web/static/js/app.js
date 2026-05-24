@@ -21,6 +21,33 @@ function startPolling() {
   }, 15000);
 }
 
+function setupIdleFollowUp() {
+  const input = document.getElementById('chatInput');
+  if (!input) return;
+
+  // 用户开始输入时重置追问计时器
+  function resetOnActivity() {
+    if (!autoAskEnabled) return;
+    if (followUpTimer) {
+      clearTimeout(followUpTimer);
+      followUpTimer = null;
+    }
+    // 如果输入框有内容，不重新调度 — 等用户发送后再由 sendChat/sendStreamChat 调度
+    const hasText = input.value.trim().length > 0;
+    if (!hasText && _followUpCount < MAX_FOLLOW_UPS) {
+      // 空输入框说明用户已发送消息，由 chat 完成处理调度
+      // 不做任何事
+    }
+  }
+
+  input.addEventListener('input', resetOnActivity);
+  input.addEventListener('focus', resetOnActivity);
+  input.addEventListener('keydown', (e) => {
+    // 非回车键说明用户在输入，重置追问
+    if (e.key !== 'Enter') resetOnActivity();
+  });
+}
+
 async function initApp() {
   // 恢复对话历史（sessionStorage 在关闭标签页后自动清除）
   restoreChatHistory();
@@ -31,11 +58,11 @@ async function initApp() {
   _followUpCount = 0;
 
   setupResizer();
+  setupIdleFollowUp();
   startPolling();
   checkProfileStatus();
   loadGoals();
 
-  // 不自动开启在线对话模式，让用户手动开启
   try {
     const resp = await api('/api/profile/status');
     const data = await resp.json();
@@ -48,31 +75,6 @@ async function initApp() {
       }
     }
   } catch(e) {}
-}
-
-function autoStart() {
-  if (!convMode) {
-    convMode = true;
-    document.getElementById('convToggle').classList.add('on');
-  }
-  if (!autoSpeakEnabled) {
-    document.getElementById('speakToggle').classList.remove('on');
-  }
-  if (!autoAskEnabled) {
-    autoAskEnabled = true;
-    document.getElementById('askToggle').classList.add('on');
-  }
-  setConvState('idle');
-  addMessage('[已自动开启] 在线对话 + 语音播报 + AI追问，可直接说话。', 'system');
-  startListening();
-  resetFollowUpChain();
-  followUpTimer = setTimeout(async () => {
-    followUpTimer = null;
-    if (!convMode) return;
-    if (convState === 'listening' && !voiceTranscript.trim() && autoAskEnabled) {
-      await tryAskFollowUp();
-    }
-  }, 10000);
 }
 
 // ==================== 侧边栏宽度可调节 ====================

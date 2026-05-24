@@ -181,6 +181,10 @@ class Database:
             "SELECT * FROM goals WHERE status=? ORDER BY priority DESC, id DESC", (status,)).fetchall()
         return [dict(r) for r in rows]
 
+    def get_goal(self, goal_id: int) -> dict:
+        row = self.conn.execute("SELECT * FROM goals WHERE id=?", (goal_id,)).fetchone()
+        return dict(row) if row else {}
+
     def delete_goal(self, goal_id: int):
         self.conn.execute("DELETE FROM goals WHERE id=?", (goal_id,))
         self.conn.commit()

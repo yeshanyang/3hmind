@@ -33,7 +33,8 @@ class ReasoningLayer:
         if self._client is None and settings.llm_api_key:
             self._client = OpenAI(
                 api_key=settings.llm_api_key,
-                base_url=settings.llm_base_url
+                base_url=settings.llm_base_url,
+                timeout=30.0
             )
         return self._client
 
@@ -50,7 +51,8 @@ class ReasoningLayer:
                     {"role": "user", "content": user_prompt}
                 ],
                 max_tokens=settings.llm_max_tokens,
-                temperature=settings.llm_temperature
+                temperature=settings.llm_temperature,
+                timeout=30.0
             )
             return resp.choices[0].message.content
         except Exception as e:
@@ -84,20 +86,25 @@ class ReasoningLayer:
                 yield char
 
     # ==================== 根因分析 ====================
-    def analyze_problem(self, question: str) -> str:
-        """对用户问题进行 LLM 驱动的根因分析（集成话题记忆）"""
-        context = self.memory.get_all_for_context()
-        similar = self._search_similar_memories(question)
+    def analyze_problem(self, question: str, prebuilt_context: str = "") -> str:
+        """对用户问题进行 LLM 驱动的根因分析（集成话题记忆）
+        prebuilt_context: 如果已从 MemoryOrchestrator.get_context_for_llm() 获取，
+                         则跳过重复的 SQLite/ChromaDB 查询"""
+        if prebuilt_context:
+            context = prebuilt_context
+            similar = ""
+            topic_context = ""
+        else:
+            context = self.memory.get_all_for_context()
+            similar = self._search_similar_memories(question)
+            topic_context = self.topic_memory.get_context_for_llm(question) if self.topic_memory else ""
+
         recent_topics = self._recent_topic_summary()
         emotion = self.perception.analyze_emotional_trend()
         detected = self.perception.detect_gaps()
 
-        # 查询话题记忆上下文（含优先级排序）
-
-        topic_context = self.topic_memory.get_context_for_llm(question)
-
         # 高优先级话题提示
-        priority_topics = self.topic_memory.list_all_topics()
+        priority_topics = self.topic_memory.list_all_topics() if self.topic_memory else []
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -137,7 +144,7 @@ class ReasoningLayer:
 感知到的能力差距: {json.dumps(detected, ensure_ascii=False) if detected else '无'}
 
 相关历史记忆:
-{similar}
+{similar or '（已包含在上述上下文）'}
 
 话题知识库记忆:
 {topic_context or '暂无相关话题记忆'}
@@ -154,31 +161,28 @@ class ReasoningLayer:
             metadata={"topic": question[:30]}
         )
 
-        # 保存分析结果到向量存储
-        if self.vector:
-            self.vector.add(
-                content=f"问题: {question}\n分析: {analysis[:500]}",
-                category="analysis",
-                metadata={"question": question, "time": str(datetime.now())}
-            )
-
         # 自动将对话存入话题记忆
         self._store_to_topic_memory(question, analysis)
 
         return analysis
 
-    def analyze_problem_stream(self, question: str):
+    def analyze_problem_stream(self, question: str, prebuilt_context: str = ""):
         """流式版本的根因分析，逐 token 返回（集成话题记忆）"""
-        context = self.memory.get_all_for_context()
-        similar = self._search_similar_memories(question)
+        if prebuilt_context:
+            context = prebuilt_context
+            similar = ""
+            topic_context = ""
+        else:
+            context = self.memory.get_all_for_context()
+            similar = self._search_similar_memories(question)
+            topic_context = self.topic_memory.get_context_for_llm(question) if self.topic_memory else ""
+
         recent_topics = self._recent_topic_summary()
         emotion = self.perception.analyze_emotional_trend()
         detected = self.perception.detect_gaps()
 
-        # 查询话题记忆上下文（含优先级排序）
-
-        topic_context = self.topic_memory.get_context_for_llm(question)
-        priority_topics = self.topic_memory.list_all_topics()
+        # 高优先级话题提示
+        priority_topics = self.topic_memory.list_all_topics() if self.topic_memory else []
         high_priority = [t for t in priority_topics if t.get("priority", 0) >= 7]
         priority_hint = ""
         if high_priority:
@@ -195,7 +199,7 @@ class ReasoningLayer:
         system_prompt = """你是一个自我成长教练智能体。请用口语化的方式回应用户，像朋友聊天一样自然。长度控制在150字以内。直接给出核心观点和建议，不要用标记符号。"""
 
         user_prompt = f"""背景: {context}{priority_hint}
-相关记忆: {similar}
+相关记忆: {similar or '（已包含在上述上下文）'}
 话题知识: {topic_context or '无'}
 用户说: {question}
 
@@ -211,12 +215,6 @@ class ReasoningLayer:
             content=question,
             metadata={"topic": question[:30]}
         )
-        if self.vector:
-            self.vector.add(
-                content=f"Q: {question}\nA: {full_response[:500]}",
-                category="conversation",
-                metadata={"question": question, "time": str(datetime.now())}
-            )
 
         # 自动将对话存入话题记忆
         self._store_to_topic_memory(question, full_response)
@@ -420,41 +418,70 @@ class ReasoningLayer:
     # ==================== AI 主动追问 ====================
     def generate_follow_up_question(self, last_user_msg: str = "",
                                      last_ai_response: str = "") -> str:
-        """根据对话上下文生成自然的追问，驱动对话继续（优先围绕核心话题）"""
+        """根据对话上下文和活跃目标生成自然的追问，优先围绕用户目标引导对话"""
         profile = self.memory.get_profile()
         goals = self.memory.list_goals("active")
         gaps = self.memory.list_gaps(resolved=False)
 
-        # 获取高优先级话题作为追问方向提示
+        goal_texts = [g['goal'] for g in goals] if goals else []
+        gap_areas = [g['area'] for g in gaps] if gaps else []
 
-        all_topics = self.topic_memory.list_all_topics()
+        # 获取高优先级话题作为追问方向提示
+        all_topics = self.topic_memory.list_all_topics() if self.topic_memory else []
         priority_topics = [t for t in all_topics if t.get("priority", 0) >= 6]
         topic_hint = ""
         if priority_topics:
-            topic_hint = f"建议围绕核心话题追问: {'、'.join(t['name'] for t in priority_topics[:3])}"
+            topic_hint = f"核心话题: {'、'.join(t['name'] for t in priority_topics[:3])}"
 
-        system_prompt = """你是一个善于引导对话的成长教练。根据上一轮对话内容，提出一个自然的追问，
-让用户继续深入思考或分享更多信息。追问要像朋友聊天一样自然，有来有回。
+        system_prompt = """你是一个善于引导对话的成长教练。你的追问应该帮助用户在活跃目标上取得进展。
 
 规则：
-1. 基于上一轮对话内容追问，不要跳到无关话题
-2. 口语化、自然，不超过40字
-3. 追问方向：深入了解用户感受、引导用户展开具体细节、或挑战用户思考
-4. 不要重复用户刚刚说过的话
-5. 只返回追问内容本身，不要加任何前缀或说明"""
+1. 优先围绕用户的活跃目标和能力差距来追问，引导用户思考如何推进目标
+2. 如果对话内容和某个目标相关，就沿着目标方向深入追问
+3. 如果对话内容与目标无关，自然地引导用户思考目标相关的话题
+4. 口语化、自然，不超过40字
+5. 不要重复用户刚刚说过的话
+6. 只返回追问内容本身，不要加任何前缀或说明"""
+
+        goals_hint = ""
+        if goal_texts:
+            goals_hint = f"【最重要】用户的活跃目标: {', '.join(goal_texts[:5])}。请围绕这些目标生成追问。"
 
         user_prompt = f"""用户画像: role={profile.get('role', '未知')}, situation={profile.get('current_situation', '未知')}
-活跃目标: {[g['goal'] for g in goals] if goals else '无'}
-能力差距: {[g['area'] for g in gaps] if gaps else '无'}
+{goals_hint}
+能力差距: {gap_areas if gap_areas else '无'}
 {topic_hint}
 
 用户刚说: {last_user_msg[:300] if last_user_msg else '(无)'}
 AI 刚回复: {last_ai_response[:300] if last_ai_response else '(无)'}
 
-请生成一个自然的追问（40字以内）："""
+请生成一个围绕用户目标的自然追问（40字以内）："""
 
         question = self._call_llm(system_prompt, user_prompt)
-        return question.strip()
+        result = question.strip() if question else ""
+
+        # 如果 LLM 返回非追问内容，用目标相关规则追问替代
+        if not result or len(result) < 3 or result.startswith("根据") or "建议" in result[:10]:
+            result = self._goal_follow_up_fallback(goal_texts, last_user_msg)
+
+        return result
+
+    def _goal_follow_up_fallback(self, goal_texts: list, last_msg: str = "") -> str:
+        """无 LLM 或 LLM 异常时，基于活跃目标生成规则追问"""
+        if goal_texts:
+            goal = goal_texts[0]
+            templates = [
+                f"关于「{goal}」，你最近有什么新的进展或想法吗？",
+                f"在「{goal}」这个目标上，遇到最大的挑战是什么？",
+                f"「{goal}」方面，你下一步打算做什么？",
+                f"你觉得自己在「{goal}」上距离理想状态还差多远？",
+                f"如果要给「{goal}」定一个小里程碑，会是什么？",
+            ]
+            import random
+            return random.choice(templates)
+        if last_msg:
+            return "能再多说说你的想法吗？"
+        return "今天有什么想深入聊的话题吗？"
 
     # ==================== 追问链 (Inquiry Chain) ====================
 
