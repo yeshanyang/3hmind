@@ -64,4 +64,31 @@ web/static/css/style.css — 新增 .goal-assess 样式，悬停时金色高亮
 → assess_with_llm() LLM辅助 + 规则引擎打分
 → 加权综合: Σ(维度得分 × 权重)
 → 更新 goals.progress → 返回评估报告
+<<<<<<< HEAD
 用户也可以在聊天区通过"学习环节"手动推进：开始学习 → 回答问题 → 验证对比基线，形成完整的 learn→feedback→verify→iterate 闭环。
+=======
+用户也可以在聊天区通过"学习环节"手动推进：开始学习 → 回答问题 → 验证对比基线，形成完整的 learn→feedback→verify→iterate 闭环。
+
+
+#2026-05-23 改进：评估建议领域知识化
+
+改进内容：
+
+1. 评估报告增加活跃目标名称
+   - _build_feedback() 第一行后新增 "目标: {goal_name}"
+   - assess_goal / assess_with_llm 从数据库获取目标名称并传入
+
+2. 改进建议领域知识化（_generate_domain_suggestions 替代 _generate_suggestion）
+   - 原问题：建议泛泛而谈（如"系统性梳理知识图谱""制定每周学习计划"），不具体
+   - 解决：一次 LLM 调用深入分析目标领域，返回：
+     • domain_knowledge: 此领域真实、具体的核心知识点名称
+     • user_known: 用户在学习会话中已展示的知识点（自动识别）
+     • user_gaps: 用户缺失的具体知识点，每项含 why_important 和 learn_how（具体资源/方法/步骤）
+     • concrete_plan: 四周具体学习计划，精确到知识内容而非时间分配
+   - 规则回退 _generate_suggestion_rule 也改为更具体的建议模板
+
+3. 数据库支持
+   - mind_layer/database.py 新增 get_goal(goal_id) 方法
+
+涉及文件：dispatch_layer/assessment_engine.py、mind_layer/database.py、web/static/js/ui.js
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636

@@ -30,6 +30,7 @@
 
 // ==================== 语音在线模式（通过麦克风按钮切换） ====================
 function toggleConversationMode() {
+<<<<<<< HEAD
   const toggle = document.getElementById('convToggle');
   if (convMode) {
     // 关闭在线对话模式
@@ -92,6 +93,13 @@ function _stopTypingWatch() {
     clearTimeout(_typingWatchTimer);
     _typingWatchTimer = null;
   }
+=======
+  // 关闭语音模式
+  convMode = false;
+  stopListening();
+  setConvState('idle');
+  if (inquiryActive) stopInquiry();
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
 }
 
 function forceStopTTS() {
@@ -132,8 +140,11 @@ function toggleAutoAsk() {
 
 function stopAll() {
   convMode = false;
+<<<<<<< HEAD
   _voicePaused = false;
   _stopTypingWatch();
+=======
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   stopRecognition();
   cleanupMediaRecorder();
   voiceInputActive = false;
@@ -192,9 +203,12 @@ function setConvState(state) {
   }
   if (convMode) {
     micBtn.classList.add('conv-active');
+<<<<<<< HEAD
   }
   if (_voicePaused) {
     micBtn.classList.add('paused');
+=======
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   }
 }
 
@@ -221,6 +235,10 @@ function detectVoiceEndPhrase(text) {
 
 // ==================== 语音识别 (Web Speech API) ====================
 function toggleMic() {
+<<<<<<< HEAD
+=======
+  // 如果正在退出语音模式
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   if (_exitingVoiceMode) return;
 
   if (_useMediaRecorder) {
@@ -232,6 +250,7 @@ function toggleMic() {
         setConvState('idle');
       }
       stopMediaRecord();
+<<<<<<< HEAD
       if (convMode) {
         document.getElementById('chatInput').placeholder = '打字中... (5秒无输入后自动恢复监听)';
         _startTypingWatch();
@@ -244,11 +263,20 @@ function toggleMic() {
         _voicePaused = false;
         _stopTypingWatch();
       }
+=======
+      if (!convMode) {
+        // 录音结束，发送
+        sendChat();
+      }
+    } else if (!micGated) {
+      convMode = true;
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
       startMediaRecord();
     }
     return;
   }
 
+<<<<<<< HEAD
   if (convState === 'listening') {
     // 停止监听
     if (convMode) {
@@ -270,6 +298,24 @@ function toggleMic() {
       _stopTypingWatch();
     }
     startListening();
+=======
+  if (convMode) {
+    // 已在语音模式 — 关闭
+    convMode = false;
+    stopListening();
+    setConvState('idle');
+    document.getElementById('chatInput').placeholder = '输入你想聊的话题...';
+    resetFollowUpChain();
+    addMessage('[语音] 语音模式已关闭。', 'system');
+  } else {
+    // 开启语音模式
+    convMode = true;
+    setConvState('idle');
+    if (!micGated) {
+      startListening();
+    }
+    addMessage('[语音] 语音模式已开启，开始说话吧。', 'system');
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   }
 }
 
@@ -672,7 +718,13 @@ function handleSilenceTimeout() {
         stopRecognition();
         addMessage('[语音] ' + accumulated, 'user');
         addMessage('[对话结束] 检测到停止意图。', 'system');
+<<<<<<< HEAD
         toggleConversationMode();
+=======
+        convMode = false;
+        stopListening();
+        setConvState('idle');
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
         return;
       }
       voiceInputActive = false;  // 先标记，防止 onend 重复发送
@@ -721,6 +773,7 @@ function stopListening() {
   }
   setConvState('idle');
   document.getElementById('chatInput').placeholder = convMode ? '正在聆听... (点击麦克风继续)' : '输入你想聊的话题...';
+<<<<<<< HEAD
 }
 
 // ==================== 语音输入完成 & 取消 ====================
@@ -790,6 +843,8 @@ function cancelVoiceInput() {
   if (convMode) {
     setTimeout(() => { if (convMode && convState === 'idle') startListening(); }, 500);
   }
+=======
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
 }
 
 // ==================== TTS 通用朗读 ====================
@@ -879,7 +934,10 @@ function scheduleNextFollowUp() {
 function _isUserActive() {
   const input = document.getElementById('chatInput');
   if (input && input.value.trim().length > 0) return true;
+<<<<<<< HEAD
   if (typeof voiceInputActive !== 'undefined' && voiceInputActive) return true;
+=======
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   if (convMode && convState === 'listening') return true;
   if (convState === 'speaking') return true;
   return false;

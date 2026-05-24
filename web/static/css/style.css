@@ -25,6 +25,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .status-dot.processing { background: #f59e0b; animation: pulse .5s infinite; }
 .status-dot.speaking { background: #22c55e; animation: pulse .8s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+<<<<<<< HEAD
 .speak-toggle, .ask-toggle, .conv-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
 .speak-toggle:hover, .ask-toggle:hover, .conv-toggle:hover { border-color: #475569; color: #94a3b8; }
 .speak-toggle .toggle-dot, .ask-toggle .toggle-dot, .conv-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
@@ -34,6 +35,18 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .speak-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
 .conv-toggle.on { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,.1); }
 .conv-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+=======
+.ask-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
+.ask-toggle:hover { border-color: #475569; color: #94a3b8; }
+.ask-toggle.on { border-color: #a855f7; color: #a855f7; background: rgba(168,85,247,.1); }
+.ask-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
+.ask-toggle.on .toggle-dot { background: #a855f7; box-shadow: 0 0 8px rgba(168,85,247,.5); }
+.speak-toggle { display: flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 600; border: 2px solid #334155; background: #1e293b; color: #64748b; transition: all .2s; white-space: nowrap; }
+.speak-toggle:hover { border-color: #475569; color: #94a3b8; }
+.speak-toggle.on { border-color: #22c55e; color: #22c55e; background: rgba(34,197,94,.1); }
+.speak-toggle .toggle-dot { width: 10px; height: 10px; border-radius: 50%; background: #475569; transition: all .2s; }
+.speak-toggle.on .toggle-dot { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+>>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
 .btn-stop { padding: 8px 18px; border-radius: 20px; cursor: pointer; font-size: 13px; font-weight: 700; border: 2px solid #dc2626; background: rgba(220,38,38,.15); color: #fca5a5; transition: all .2s; white-space: nowrap; animation: pulse-stop 1.2s infinite; }
 .btn-stop:hover { background: #dc2626; color: #fff; }
 @keyframes pulse-stop { 0%,100% { border-color: #dc2626; } 50% { border-color: #ef4444; box-shadow: 0 0 12px rgba(220,38,38,.4); } }
