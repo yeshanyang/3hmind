@@ -931,17 +931,7 @@ export default function App() {
   };
 
   const handleStopInquiry = async () => {
-    try {
-      const resp = await apiCall('/api/inquiry/stop', { method: 'POST' });
-      if (resp.ok) {
-        const data = await resp.json();
-        if (data.summary) {
-          const sMsg = addMessage(`[主题复习] ${data.summary}`, 'agent');
-          await speakText(data.summary, sMsg.id);
-        }
-      }
-    } catch (e) {}
-
+    // 先关闭界面，让用户立刻看到响应
     setInquiryActive(false);
     setInquiryQuestions([]);
     setInquiryIndex(0);
@@ -949,6 +939,19 @@ export default function App() {
     setWaitingForInquiryAnswer(false);
     setInquiryInsightsCount(0);
     setConvState('idle');
+
+    // 后台执行结束请求，不影响已关闭的界面
+    try {
+      const resp = await apiCall('/api/inquiry/stop', { method: 'POST' });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.summary) {
+          const sMsg = addMessage(`[主题复习] ${data.summary}`, 'agent');
+          speakText(data.summary, sMsg.id);
+        }
+      }
+    } catch (e) {}
+
     loadWorkspace();
   };
 
