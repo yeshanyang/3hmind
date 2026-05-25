@@ -245,10 +245,6 @@ export default function App() {
     localStorage.setItem('3hmind_token', token);
     setAuthToken(token);
     setCurrentUser(username);
-    // Explicit trigger of system configuration loading
-    setTimeout(() => {
-      loadWorkspace();
-    }, 100);
   };
 
   const handleLogout = () => {
