@@ -119,4 +119,10 @@ export default function ChatInput({
           disabled={!inputText.trim() || isProcessing}
           className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 disabled:opacity-30 flex items-center justify-center text-white border border-white/10 shadow-lg hover:shadow-blue-500/10 duration-200 active:scale-95 cursor-pointer"
           title="发送文字并加入思维模型队列"
-     
+        >
+          <Send className="w-4.5 h-4.5" />
+        </button>
+      </div>
+    </div>
+  );
+}

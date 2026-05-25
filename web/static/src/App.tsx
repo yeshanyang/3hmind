@@ -1186,4 +1186,12 @@ export default function App() {
                 onClose={() => setMediaModalOpen(false)}
                 defaultTab={mediaModalTab}
                 apiCall={apiCall}
-                onAddMessage={addMe
+                onAddMessage={addMessage}
+              />
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}
