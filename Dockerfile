@@ -1,8 +1,8 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
-# 先复制 requirements.txt，合并 apt 与 pip 为单层
+# 安装系统依赖 + Python 依赖
 COPY requirements.txt .
 RUN sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g' /etc/apt/sources.list.d/debian.sources \
     && apt-get update \
@@ -10,10 +10,34 @@ RUN sed -i 's|http://deb.debian.org/debian|http://mirrors.aliyun.com/debian|g' /
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ -r requirements.txt
 
-# 复制项目文件
+# ========== 前端构建阶段 ==========
+FROM node:20-alpine AS frontend
+
+WORKDIR /build
+COPY web/static/package.json web/static/package-lock.json* ./
+RUN npm ci
+COPY web/static/ .
+RUN npm run build
+
+# ========== 最终运行阶段 ==========
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# 复制 Python 依赖
+COPY --from=backend /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=backend /usr/local/bin /usr/local/bin
+
+# 安装运行时系统依赖 (curl 用于 healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
+# 复制项目文件 (后端代码)
 COPY . .
 
-# 创建用户、数据目录、预置 ONNX 模型，合并为单层
+# 复制前端构建产物
+COPY --from=frontend /build/dist /app/web/static/dist
+
+# 创建用户、数据目录、预置 ONNX 模型
 RUN useradd -m -s /bin/bash appuser \
     && mkdir -p /app/data /app/memory/topics /app/chroma_db \
     && mkdir -p /home/appuser/.cache/chroma/onnx_models/all-MiniLM-L6-v2 \

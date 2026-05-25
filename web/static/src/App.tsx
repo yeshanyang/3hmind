@@ -257,12 +257,12 @@ export default function App() {
         if (resp.ok) {
           const data = await resp.json();
           if (data.reflection) {
-            addMessage('[自主复盘]\n' + data.reflection, 'agent');
-            if (autoSpeak) speakText('[自主复盘]\n' + data.reflection);
+            const msg = addMessage('[自主复盘]\n' + data.reflection, 'agent');
+            if (autoSpeak) speakText('[自主复盘]\n' + data.reflection, msg.id);
           }
           if (data.nudge) {
-            addMessage('[自主提醒]\n' + data.nudge, 'agent');
-            if (autoSpeak) speakText('[自主提醒]\n' + data.nudge);
+            const msg = addMessage('[自主提醒]\n' + data.nudge, 'agent');
+            if (autoSpeak) speakText('[自主提醒]\n' + data.nudge, msg.id);
           }
         }
       } catch (e) {}
@@ -829,8 +829,8 @@ export default function App() {
       if (resp.ok) {
         const data = await resp.json();
         if (data.question) {
-          addMessage(`[追问 ${followUpCountRef.current}/3] ${data.question}`, 'agent');
-          await speakText(data.question);
+          const msg = addMessage(`[追问 ${followUpCountRef.current}/3] ${data.question}`, 'agent');
+          await speakText(data.question, msg.id);
 
           if (convMode) {
             setConvState('idle');
@@ -864,10 +864,10 @@ export default function App() {
         setWaitingForInquiryAnswer(true);
         setConvState('idle');
 
-        addMessage(`[系统] 深度研究项目“${data.topic || topic}”正式启动！`, 'system');
+        addMessage(`[系统] 深度研究项目”${data.topic || topic}”正式启动！`, 'system');
         const firstQ = data.questions?.[0]?.text || '我们准备好了，请开始描绘您的核心想法';
-        addMessage(firstQ, 'agent');
-        await speakText(firstQ);
+        const qMsg = addMessage(firstQ, 'agent');
+        await speakText(firstQ, qMsg.id);
 
         if (convMode) startListening();
       }
@@ -898,8 +898,8 @@ export default function App() {
           setConvState('idle');
 
           const summary = data.summary || '主题评估结束';
-          addMessage(summary, 'agent');
-          await speakText(summary);
+          const summaryMsg = addMessage(summary, 'agent');
+          await speakText(summary, summaryMsg.id);
           loadWorkspace();
           return;
         }
@@ -917,8 +917,8 @@ export default function App() {
         }
 
         const block = data.acknowledgment ? `${data.acknowledgment}\n\n${data.question}` : data.question;
-        addMessage(block, 'agent');
-        await speakText(block);
+        const blockMsg = addMessage(block, 'agent');
+        await speakText(block, blockMsg.id);
 
         setWaitingForInquiryAnswer(true);
         setConvState('idle');
@@ -936,8 +936,8 @@ export default function App() {
       if (resp.ok) {
         const data = await resp.json();
         if (data.summary) {
-          addMessage(`[主题复习] ${data.summary}`, 'agent');
-          await speakText(data.summary);
+          const sMsg = addMessage(`[主题复习] ${data.summary}`, 'agent');
+          await speakText(data.summary, sMsg.id);
         }
       }
     } catch (e) {}
@@ -961,8 +961,8 @@ export default function App() {
         const data = await resp.json();
         setConvState('idle');
         if (data.question) {
-          addMessage(data.question, 'agent');
-          await speakText(data.question);
+          const pMsg = addMessage(data.question, 'agent');
+          await speakText(data.question, pMsg.id);
         }
       }
     } catch (e) {
@@ -1120,7 +1120,15 @@ export default function App() {
               apiCall={apiCall}
               profile={profile}
               onRefreshProfile={checkProfileStatus}
-              onSendAction={(url) => url ? apiCall(url, { method: 'POST' }).then(() => loadWorkspace()) : loadGoals()}
+              onSendAction={async (url) => {
+                if (!url) { loadGoals(); return; }
+                try {
+                  const r = await apiCall(url, { method: 'POST' });
+                  const data = await r.json();
+                  addMessage(data.result || data.nudge || data.message || data.reflection || '操作完成。', 'agent');
+                } catch (e) {}
+                loadWorkspace();
+              }}
               onSendPlan={() => apiCall('/api/plan', { method: 'POST' }).then(async (r) => {
                 const data = await r.json();
                 addMessage(data.result || '方案制作完成。', 'agent');

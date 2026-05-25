@@ -40,7 +40,7 @@ API概览 — 30+路由分6类列出
 - **自动排程** — 后台线程定时反思（60分钟）与轻推（120分钟）
 - **SSE流式响应** — Server-Sent Events 实时逐token输出
 - **语音交互** — 浏览器录音 → Whisper兼容API转写 + 浏览器TTS朗读回复
-- **前端模块化** — SPA 按职责拆分为 7 个独立 JS 模块 (state/api/auth/ui/voice/chat/app) + 独立 CSS，index.html 从 82KB 精简至 10KB
+- **前端现代化** — React 19 + TypeScript + Vite 6 + Tailwind CSS v4，组件化架构（Header/ChatArea/ChatInput/Sidebar/Modals/LoginOverlay），Lucide 图标库，Framer Motion 动画
 - **个人仪表盘** — 展示个人画像、目标、能力、差距、洞察与主题记忆
 - **画像自动提取** — 新用户默认「全栈工程师 / 持续学习成长中」，首次对话后 LLM 从对话中自动提取真实角色、情境、情绪状态、目标与能力，持续优化
 - **记忆整合** — 对话记录达到阈值后自动整合为洞察
@@ -60,7 +60,7 @@ API概览 — 30+路由分6类列出
 | **嵌入模型** | 通过LLM API（默认1536维） |
 | **认证** | JWT（python-jose）+ bcrypt密码哈希 |
 | **用户存储** | JSON文件（`data/users.json`） |
-| **前端** | 原生 JS + HTML + CSS（SPA单页应用） |
+| **前端** | React 19 + TypeScript + Vite 6 + Tailwind CSS v4（构建后部署） |
 | **容器化** | Docker + Docker Compose + Docker构建规范 |
 | **反向代理** | Caddy（HTTPS + 域名路由） |
 | **配置管理** | `.env` + pydantic-settings |
@@ -111,19 +111,28 @@ API概览 — 30+路由分6类列出
 │   └── reasoning_layer.py      #   核心LLM调用
 │
 ├── web/                        # Web层
-│   ├── app.py                  #   FastAPI工厂
+│   ├── app.py                  #   FastAPI工厂（挂载 /assets 提供构建产物）
 │   ├── routes.py               #   全部API路由 (30+)
 │   └── static/
-│       ├── index.html          #   SPA前端
-│       ├── css/style.css       #   样式
-│       └── js/
-│           ├── api.js          #   API客户端
-│           ├── auth.js         #   登录/注册/登出
-│           ├── state.js        #   全局状态管理
-│           ├── ui.js           #   UI渲染与仪表盘
-│           ├── voice.js        #   语音识别 + TTS
-│           ├── chat.js         #   对话逻辑与流式输出
-│           └── app.js          #   应用初始化与轮询
+│       ├── index.html          #   SPA入口 (开发时)
+│       ├── src/                #   React + TypeScript 源码
+│       │   ├── main.tsx        #   入口
+│       │   ├── App.tsx         #   主组件 (状态管理/语音/SSE/TTS)
+│       │   ├── types.ts        #   TypeScript 类型定义
+│       │   ├── index.css       #   Tailwind CSS + 玻璃拟态工具类
+│       │   └── components/
+│       │       ├── LoginOverlay.tsx  #   登录/注册
+│       │       ├── Header.tsx       #   顶栏 (语音播报/AI追问/在线对话)
+│       │       ├── Sidebar.tsx      #   侧边栏 (复盘/目标/画像/上传)
+│       │       ├── ChatArea.tsx     #   消息列表 + 播报按钮
+│       │       ├── ChatInput.tsx    #   输入框 + 语音按钮
+│       │       └── Modals.tsx       #   多模态上传弹窗
+│       ├── dist/               #   Vite构建产物 (自动生成)
+│       │   ├── index.html
+│       │   └── assets/
+│       ├── package.json
+│       ├── vite.config.ts
+│       └── tsconfig.json
 │
 └── data/                       # 运行时数据 (gitignore)
     └── {username}/             #   每用户独立数据库
@@ -149,14 +158,20 @@ python -m venv .venv
 source .venv/bin/activate   # Linux/Mac
 # .venv\Scripts\activate    # Windows
 
-# 3. 安装依赖
+# 3. 安装 Python 依赖
 pip install -r requirements.txt
 
-# 4. 配置环境变量
+# 4. 构建前端 (Node.js 18+ 需要)
+cd web/static
+npm install
+npm run build        # 输出到 dist/
+cd ../..
+
+# 5. 配置环境变量
 cp .env.example .env
 # 编辑 .env，填入 LLM_API_KEY、JWT_SECRET_KEY、DEFAULT_ADMIN_PASSWORD
 
-# 5. 启动
+# 6. 启动
 python main.py
 # 访问 http://localhost:8080
 ```
@@ -164,13 +179,17 @@ python main.py
 ### Docker部署
 
 ```bash
-# 单容器
+# 构建镜像（自动构建前端 + 后端）
 docker build -t 3hmind:latest .
+
+# 单容器运行
 docker run -p 8080:8080 --env-file .env -v ./data:/app/data 3hmind:latest
 
 # 全栈部署（含Caddy反向代理）
 docker compose -f docker-compose-new.yml up -d
 ```
+
+> 注意：Docker 镜像使用多阶段构建，自动执行 `npm install && npm run build`，无需本地预先构建前端。
 
 ## 配置说明
 
@@ -291,7 +310,7 @@ docker compose -f docker-compose-new.yml up -d
 
 - 项目正处于 **v3 重构阶段** — `memory/`、`perception/`、`interaction/` 目录为旧模块的重定向桩，实际逻辑已迁移至 `mind_layer/`、`dispatch_layer/`
 - `legacy/` 目录提供向后兼容的桥接类，确保平滑过渡
-- 前端为零构建步骤的原生 SPA，由 FastAPI 直接托管静态文件，已拆分为 7 个 JS 模块 + 独立 CSS
+- 前端为 React 19 + TypeScript + Vite 6 构建的 SPA，由 FastAPI 托管构建产物（`dist/`），后端通过 `/assets` 路由提供 JS/CSS 静态文件
 - 认知管线通过 `agent.py` 中的 `UnifiedAgent` 类统一编排
 - Docker 镜像已优化：合并 RUN 层、非 root 用户 (`appuser`)、HEALTHCHECK、阿里云镜像加速
 
