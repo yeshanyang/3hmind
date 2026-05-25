@@ -128,17 +128,8 @@ export default function App() {
       isStreaming,
     };
     setMessages((prev) => [...prev, newMsg]);
-    // Save chat dynamically to session memory
-    setTimeout(() => {
-      const area = document.querySelector('.chat-area');
-      if (area) {
-        try {
-          sessionStorage.setItem('3hmind_chat_react', JSON.stringify(messages));
-        } catch (e) {}
-      }
-    }, 50);
     return newMsg;
-  }, [messages]);
+  }, []);
 
   // Text-To-Speech Single playing
   const speakTextOne = (text: string): Promise<void> => {
@@ -1079,6 +1070,19 @@ export default function App() {
       }
     } catch (e) {}
   }, []);
+
+  // Auto-save messages to sessionStorage (debounced, skips during streaming)
+  const prevSaveRef = useRef<string>('');
+  useEffect(() => {
+    const nonStreaming = messages.filter(m => !m.isStreaming);
+    const json = JSON.stringify(nonStreaming);
+    if (json === prevSaveRef.current) return;
+    prevSaveRef.current = json;
+    const timer = setTimeout(() => {
+      try { sessionStorage.setItem('3hmind_chat_react', json); } catch (e) {}
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#0a0a14] text-white font-sans overflow-hidden relative">
