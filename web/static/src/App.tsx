@@ -1156,7 +1156,17 @@ export default function App() {
               <ChatArea
                 messages={messages}
                 activeSpeakingId={activeSpeakingId}
-                onSpeakMessage={speakText}
+                onSpeakMessage={(id, text) => {
+                  if (activeSpeakingId === id) {
+                    synthRef.current.cancel();
+                    ttsResetQueue();
+                    setActiveSpeakingId(null);
+                    setConvState('idle');
+                    micGatedRef.current = false;
+                  } else {
+                    speakText(text, id);
+                  }
+                }}
                 convState={convState}
               />
 

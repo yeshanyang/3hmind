@@ -229,9 +229,9 @@ export default function ChatArea({
                         title={activeSpeakingId === msg.id ? '正在朗读 — 点击静音' : '朗读此条回复'}
                       >
                         {activeSpeakingId === msg.id ? (
-                          <Volume2 className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                          <VolumeX className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
                         ) : (
-                          <VolumeX className="w-3.5 h-3.5" />
+                          <Volume2 className="w-3.5 h-3.5" />
                         )}
                       </button>
                     )}
