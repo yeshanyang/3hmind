@@ -52,6 +52,11 @@ class LoginRequest(BaseModel):
 @router.get("/", response_class=HTMLResponse)
 async def index():
     static_dir = os.path.join(os.path.dirname(__file__), "static")
+    # 优先返回 Vite 构建产物 (dist/)，否则返回源码 index.html
+    dist_index = os.path.join(static_dir, "dist", "index.html")
+    if os.path.exists(dist_index):
+        with open(dist_index, "r", encoding="utf-8") as f:
+            return f.read()
     with open(os.path.join(static_dir, "index.html"), "r", encoding="utf-8") as f:
         return f.read()
 

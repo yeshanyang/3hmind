@@ -20,6 +20,10 @@ app.add_middleware(
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+dist_assets_dir = os.path.join(static_dir, "dist", "assets")
+if os.path.exists(dist_assets_dir):
+    app.mount("/assets", StaticFiles(directory=dist_assets_dir), name="assets")
+
 # 延迟导入 routes 避免循环依赖
 from web.routes import router
 app.include_router(router)

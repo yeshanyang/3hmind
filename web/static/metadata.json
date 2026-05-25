@@ -1,0 +1,6 @@
+{
+  "name": "3hmind 自我成长智能体",
+  "description": "基于深度推理与语音自主交互的多模态自我成长管理智能体，支持流式对话、记忆检索、专家客观评估与目标管理。",
+  "requestFramePermissions": ["camera", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
