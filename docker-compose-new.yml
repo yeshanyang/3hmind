@@ -17,6 +17,8 @@ services:
       - ../3hmind/.env
     volumes:
       - ../3hmind/data:/app/data
+      - ../3hmind/web/static:/app/web/static
+
     networks:
       - web
 

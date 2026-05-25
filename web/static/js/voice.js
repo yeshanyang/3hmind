@@ -30,7 +30,6 @@
 
 // ==================== 语音在线模式（通过麦克风按钮切换） ====================
 function toggleConversationMode() {
-<<<<<<< HEAD
   const toggle = document.getElementById('convToggle');
   if (convMode) {
     // 关闭在线对话模式
@@ -93,13 +92,6 @@ function _stopTypingWatch() {
     clearTimeout(_typingWatchTimer);
     _typingWatchTimer = null;
   }
-=======
-  // 关闭语音模式
-  convMode = false;
-  stopListening();
-  setConvState('idle');
-  if (inquiryActive) stopInquiry();
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
 }
 
 function forceStopTTS() {
@@ -140,11 +132,8 @@ function toggleAutoAsk() {
 
 function stopAll() {
   convMode = false;
-<<<<<<< HEAD
   _voicePaused = false;
   _stopTypingWatch();
-=======
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   stopRecognition();
   cleanupMediaRecorder();
   voiceInputActive = false;
@@ -203,12 +192,9 @@ function setConvState(state) {
   }
   if (convMode) {
     micBtn.classList.add('conv-active');
-<<<<<<< HEAD
   }
   if (_voicePaused) {
     micBtn.classList.add('paused');
-=======
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   }
 }
 
@@ -235,10 +221,6 @@ function detectVoiceEndPhrase(text) {
 
 // ==================== 语音识别 (Web Speech API) ====================
 function toggleMic() {
-<<<<<<< HEAD
-=======
-  // 如果正在退出语音模式
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   if (_exitingVoiceMode) return;
 
   if (_useMediaRecorder) {
@@ -250,7 +232,6 @@ function toggleMic() {
         setConvState('idle');
       }
       stopMediaRecord();
-<<<<<<< HEAD
       if (convMode) {
         document.getElementById('chatInput').placeholder = '打字中... (5秒无输入后自动恢复监听)';
         _startTypingWatch();
@@ -263,20 +244,11 @@ function toggleMic() {
         _voicePaused = false;
         _stopTypingWatch();
       }
-=======
-      if (!convMode) {
-        // 录音结束，发送
-        sendChat();
-      }
-    } else if (!micGated) {
-      convMode = true;
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
       startMediaRecord();
     }
     return;
   }
 
-<<<<<<< HEAD
   if (convState === 'listening') {
     // 停止监听
     if (convMode) {
@@ -298,32 +270,14 @@ function toggleMic() {
       _stopTypingWatch();
     }
     startListening();
-=======
-  if (convMode) {
-    // 已在语音模式 — 关闭
-    convMode = false;
-    stopListening();
-    setConvState('idle');
-    document.getElementById('chatInput').placeholder = '输入你想聊的话题...';
-    resetFollowUpChain();
-    addMessage('[语音] 语音模式已关闭。', 'system');
-  } else {
-    // 开启语音模式
-    convMode = true;
-    setConvState('idle');
-    if (!micGated) {
-      startListening();
-    }
-    addMessage('[语音] 语音模式已开启，开始说话吧。', 'system');
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   }
 }
 
-function startListening() {
+function startListening(keepText = false) {
   if (_useMediaRecorder) { startMediaRecord(); return; }
 
   // 如果用户正在手动输入文字，不自动启动语音（但 typing watch 恢复/手动恢复除外）
-  if (!voiceInputActive && !_voicePaused) {
+  if (!voiceInputActive && !_voicePaused && !keepText) {
     const existingText = document.getElementById('chatInput').value.trim();
     if (existingText.length > 0) {
       return;
@@ -362,7 +316,9 @@ function startListening() {
   if (!voiceInputActive) {
     _savedTypedText = document.getElementById('chatInput').value;
   }
-  voiceTranscript = '';
+  if (!keepText) {
+    voiceTranscript = '';
+  }
   silenceHandled = false;
   recognition = new SpeechRecognition();
   recognition.lang = 'zh-CN';
@@ -372,14 +328,15 @@ function startListening() {
 
   recognition.onstart = () => {
     _networkErrCount = 0;
-    // 防御：保存当前输入框中非语音产生的文字
     if (!voiceInputActive && document.getElementById('chatInput').value.trim()) {
       _savedTypedText = document.getElementById('chatInput').value;
     }
     voiceInputActive = true;
-    voiceFinalText = '';
+    if (!keepText) {
+      voiceFinalText = '';
+      document.getElementById('chatInput').value = '';
+    }
     setConvState('listening');
-    document.getElementById('chatInput').value = '';
     document.getElementById('chatInput').placeholder = '正在聆听... (说出结束词自动发送)';
     resetSilenceTimer();
   };
@@ -389,6 +346,7 @@ function startListening() {
     _restartCount = 0;
     _networkErrCount = 0;
     _lastInputWasVoice = false;
+    _silentCycles = 0;
     resetFollowUpChain();
     resetSilenceTimer();
 
@@ -477,17 +435,19 @@ function startListening() {
       return;
     }
     if (!convMode) {
-      if (recognition._ending) return;
-      recognition._ending = true;
+      // 静音倒计时进行中说明浏览器提前结束了识别，自动重启继续聆听，保留已累积文本
+      if (silenceTimer) {
+        recognition = null;
+        startListening(true);
+        return;
+      }
       const text = document.getElementById('chatInput').value.trim();
       stopRecognition();
-      // 仅当未被 end-word / silence 提前处理时才自动发送
       if (text && text.length > 2 && voiceInputActive) {
         voiceInputActive = false;
         sendChat();
       } else {
         voiceInputActive = false;
-        // 恢复用户在语音启动前手动输入的文字
         if (_savedTypedText) {
           document.getElementById('chatInput').value = _savedTypedText;
           _savedTypedText = '';
@@ -496,8 +456,6 @@ function startListening() {
         document.getElementById('micBtn').classList.remove('active', 'conv-active');
       }
     }
-    // convMode 但不在 listening（暂停/idle/processing/speaking）：不做任何事
-    // 语音已在 toggleMic/handleSilenceTimeout 中正确处理
   };
 
   try {
@@ -659,12 +617,10 @@ function restartListening() {
 // ==================== 静音检测 ====================
 function resetSilenceTimer() {
   clearSilenceTimer();
-  if (convMode) {
-    const fullText = (voiceTranscript + document.getElementById('chatInput').value.replace(voiceTranscript, '')).trim();
-    const isComplete = detectSentenceEnd(fullText);
-    const timeout = isComplete ? SILENCE_SHORT : SILENCE_LONG;
-    startSilenceCountdown(timeout);
-  }
+  const fullText = (voiceTranscript + document.getElementById('chatInput').value.replace(voiceTranscript, '')).trim();
+  const isComplete = detectSentenceEnd(fullText);
+  const timeout = isComplete ? SILENCE_SHORT : SILENCE_LONG;
+  startSilenceCountdown(timeout);
 }
 
 function startSilenceCountdown(timeout) {
@@ -718,16 +674,10 @@ function handleSilenceTimeout() {
         stopRecognition();
         addMessage('[语音] ' + accumulated, 'user');
         addMessage('[对话结束] 检测到停止意图。', 'system');
-<<<<<<< HEAD
         toggleConversationMode();
-=======
-        convMode = false;
-        stopListening();
-        setConvState('idle');
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
         return;
       }
-      voiceInputActive = false;  // 先标记，防止 onend 重复发送
+      voiceInputActive = false;
       stopRecognition();
       _hasSpoken = false;
       _lastInputWasVoice = true;
@@ -737,11 +687,29 @@ function handleSilenceTimeout() {
         stopRecognition();
         _hasSpoken = false;
         silenceHandled = false;
-        setTimeout(() => {
-          if (convMode && convState === 'idle') startListening();
-        }, 300);
+        _silentCycles++;
+        if (_silentCycles >= 3) {
+          _silentCycles = 0;
+          setConvState('idle');
+          if (_followUpCount < MAX_FOLLOW_UPS && autoAskEnabled) {
+            tryAskFollowUp();
+          }
+        } else {
+          setTimeout(() => {
+            if (convMode && convState === 'idle') startListening();
+          }, 300);
+        }
       }
     }
+  } else if (accumulated && accumulated.length >= 2) {
+    voiceInputActive = false;
+    stopRecognition();
+    finishVoiceInput();
+  } else if (convState === 'listening') {
+    voiceInputActive = false;
+    stopRecognition();
+    document.getElementById('chatInput').placeholder = '输入你想聊的话题...';
+    setConvState('idle');
   }
 }
 
@@ -773,7 +741,6 @@ function stopListening() {
   }
   setConvState('idle');
   document.getElementById('chatInput').placeholder = convMode ? '正在聆听... (点击麦克风继续)' : '输入你想聊的话题...';
-<<<<<<< HEAD
 }
 
 // ==================== 语音输入完成 & 取消 ====================
@@ -843,8 +810,6 @@ function cancelVoiceInput() {
   if (convMode) {
     setTimeout(() => { if (convMode && convState === 'idle') startListening(); }, 500);
   }
-=======
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
 }
 
 // ==================== TTS 通用朗读 ====================
@@ -934,10 +899,7 @@ function scheduleNextFollowUp() {
 function _isUserActive() {
   const input = document.getElementById('chatInput');
   if (input && input.value.trim().length > 0) return true;
-<<<<<<< HEAD
   if (typeof voiceInputActive !== 'undefined' && voiceInputActive) return true;
-=======
->>>>>>> 5a60373d7f4c91a4bb891bcb1000a02a2a1be636
   if (convMode && convState === 'listening') return true;
   if (convState === 'speaking') return true;
   return false;

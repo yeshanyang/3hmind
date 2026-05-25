@@ -115,6 +115,14 @@ async function sendStreamChat(msg, contextType) {
                   micGated = true;
                   stopRecognition();
                   setConvState('speaking');
+                  if (!msgDiv.querySelector('.msg-speak-btn')) {
+                    const btn = document.createElement('button');
+                    btn.className = 'msg-speak-btn speaking';
+                    btn.innerHTML = '&#128266;';
+                    btn.title = '朗读中 — 点击停止';
+                    btn.onclick = (e) => { e.stopPropagation(); speakMessage(msgDiv, msgDiv.textContent); };
+                    msgDiv.appendChild(btn);
+                  }
                 }
               }
               for (const s of newSentences) {
@@ -157,7 +165,11 @@ async function sendStreamChat(msg, contextType) {
   setTimeout(() => { micGated = false; }, 200);
 
   const finalText = msgDiv.textContent;
-  if (finalText && finalText.length > 20 && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
+  const speakBtn = msgDiv.querySelector('.msg-speak-btn');
+  if (speakBtn) {
+    speakBtn.classList.remove('speaking');
+    speakBtn.title = '朗读';
+  } else if (finalText && finalText.length > 20 && !finalText.startsWith('错误') && !finalText.startsWith('请求失败')) {
     const btn = document.createElement('button');
     btn.className = 'msg-speak-btn';
     btn.innerHTML = '&#128266;';

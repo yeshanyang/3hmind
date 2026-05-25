@@ -73,7 +73,7 @@ let _ttsSpokenLen = 0;
 let _ttsActive = false;
 
 // 静音检测常量
-const SILENCE_LONG = 10;
+const SILENCE_LONG = 3;
 const SILENCE_SHORT = 3;
 
 // 句尾检测模式
@@ -102,6 +102,7 @@ const STOP_PHRASES = [
 let _restartingListening = false;
 let _restartCount = 0;
 let _hasSpoken = false;
+let _silentCycles = 0;           // 连续静音周期计数，用于触发追问
 const RESTART_DELAYS = [2, 5, 10, 20, 30, 60];
 
 const _SENTENCE_RE = /[。！？.!?\n]/;
